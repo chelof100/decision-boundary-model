@@ -8,6 +8,8 @@
 \usepackage{enumitem}
 \usepackage{microtype}
 \usepackage[numbers,sort&compress]{natbib}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, patterns, decorations.pathreplacing}
 
 % ---------- Theorem environments ----------
 \theoremstyle{plain}
@@ -63,10 +65,11 @@ execution as a labeled transition system (LTS), we distinguish two classes:
 single LTS step, and \emph{split evaluation systems}, where they are separate
 transitions that may be interleaved by environmental actions.
 
-We prove that no construction can make a split system equivalent to an atomic
-system with respect to admissibility under all execution traces.  This
-limitation is a structural property of the system architecture, not of policy
-expressiveness or state availability.  We further formalize the \Escalate{}
+Under our environment model (Assumptions~2.1--2.2), we prove that no
+construction can make a split system equivalent to an atomic system with
+respect to admissibility under all execution traces.  This limitation is a
+structural property of the system architecture, not of policy expressiveness
+or state availability.  We further formalize the \Escalate{}
 outcome---absent from classical time-of-check/time-of-use (TOCTOU) analyses---
 and show that its resolution is itself subject to the atomic boundary
 requirement, extending the guarantees of the main theorem.
@@ -90,6 +93,19 @@ delegations all commit changes that cannot simply be rolled back.  As a result,
 the question of whether a given action should be allowed to execute must be
 resolved precisely at the moment the transition is committed---not before, and
 not after.
+
+Consider a concrete scenario.  An agent is authorized to transfer funds from
+a shared ledger.  A policy engine evaluates the request against the current
+balance and account status, returns $\Allow$, and triggers the transfer.  In
+the interval between that evaluation and the execution of the debit, a
+concurrent transaction---another agent repaying a loan---reduces the balance
+below the required amount.  The transfer executes against an inadmissible
+state.  The guarantee the policy was meant to enforce has evaporated.  No
+refinement of the policy expression could have prevented this: the failure
+is not in what the policy \emph{knows}, but in \emph{when} the transition
+fires relative to the state it governs.  We call the gap between these two
+moments the \emph{decision boundary problem}, and formalize it precisely in
+what follows.
 
 Current governance approaches address this question indirectly.  \emph{Policy
 engines} evaluate rules against input data prior to execution.  \emph{Access
@@ -428,6 +444,79 @@ and potentially fires a transition ($T(s_t, a)$).  This is precisely the
 structure of a decision boundary.
 
 % ============================================================
+% Figure: split vs atomic architectures
+% ============================================================
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  node distance = 1.0cm and 1.5cm,
+  box/.style    = {draw, rounded corners=3pt, minimum width=2.0cm,
+                   minimum height=0.7cm, align=center, font=\small},
+  envbox/.style = {draw, dashed, rounded corners=3pt, minimum width=1.8cm,
+                   minimum height=0.7cm, align=center, font=\small,
+                   text=gray!70!black},
+  arr/.style    = {-{Stealth[length=5pt]}, thick},
+  darr/.style   = {-{Stealth[length=5pt]}, thick, dashed, gray!60},
+  label/.style  = {font=\small\bfseries}
+]
+
+%% ---- LEFT: SPLIT SYSTEM ----
+\node[label] (splitlabel) {\textsf{Split Evaluation System}};
+
+\node[box, below=0.5cm of splitlabel] (agent1)   {Agent};
+\node[box, right=1.5cm of agent1]     (policy)   {Policy\\Engine};
+\node[box, right=1.5cm of policy]     (db1)      {State\\Transition};
+\node[envbox, above=0.8cm of policy,
+      xshift=0.8cm]                   (env)      {$e \in A_{\mathrm{env}}$};
+
+% arrows
+\draw[arr] (agent1) -- node[above,font=\scriptsize]{$a$} (policy);
+\draw[arr] (policy) -- node[above,font=\scriptsize]{$d{=}\Allow$} (db1);
+\draw[darr] (env)   -- node[right,font=\scriptsize,text=gray]{mutates $s$} (db1);
+
+% gap annotation
+\draw[decorate, decoration={brace, amplitude=5pt, raise=3pt},
+      gray, thick]
+  (policy.south east) -- (db1.south west)
+  node[midway, below=8pt, font=\scriptsize, gray]{$\Delta t > 0$: exploitable gap};
+
+%% ---- RIGHT: ATOMIC SYSTEM ----
+\begin{scope}[xshift=9.0cm]
+\node[label] (atomlabel) {\textsf{Atomic Decision System}};
+
+\node[box, below=0.5cm of atomlabel] (agent2) {Agent};
+
+% atomic kernel box (filled lightly)
+\node[box, right=1.5cm of agent2,
+      minimum width=2.6cm,
+      fill=black!6,
+      label={[font=\tiny, text=black!50]south:single LTS step}]
+      (kernel) {Atomic\\Boundary $F$};
+
+\node[box, right=1.5cm of kernel] (db2) {State\\Transition};
+
+\draw[arr] (agent2) -- node[above,font=\scriptsize]{$a$}    (kernel);
+\draw[arr] (kernel) -- node[above,font=\scriptsize]{$(d,s')$} (db2);
+
+% no-interleave annotation
+\node[envbox, above=0.8cm of kernel,
+      xshift=0.4cm, text=gray!50] (noenv) {$e \in A_{\mathrm{env}}$};
+\draw[darr, gray!30] (noenv) -- (kernel);
+\node[font=\scriptsize, gray, right=0.05cm of noenv] {blocked};
+\end{scope}
+
+\end{tikzpicture}
+\caption{Architectural contrast between a split evaluation system (left) and an
+atomic decision system (right).  In the split system, environment actions
+$e \in A_{\mathrm{env}}$ can interleave between the policy evaluation and the
+state transition, producing the exploitable gap $\Delta t > 0$ that
+Theorem~\ref{thm:main} makes precise.  In the atomic system, $F$ determines
+the decision and the resulting state as a \emph{single indivisible LTS step};
+no environment action can interleave within that step.}
+\label{fig:architecture}
+\end{figure}
+
+% ============================================================
 \section{The Failure of Split Systems}
 \label{sec:failure}
 % ============================================================
@@ -672,12 +761,25 @@ structural and does not reflect comparisons of expressiveness or performance.
 \toprule
 \textbf{System} & \textbf{Class} & \textbf{Basis for classification} \\
 \midrule
-RBAC~\cite{sandhu96} & Split & Permissions evaluated separately from execution \\
-OPA~\cite{opa}        & Split & Policy evaluation external to transition \\
-OPA + Redis           & Split & External state enriches $D$; gap remains (Cor.~\ref{cor:extstate}) \\
-Kubernetes Admission  & Partially atomic & Webhook admits before object creation,
-                                           but out-of-band \\
-ACP~\cite{acp26}      & Atomic & Decision and state mutation jointly enforced \\
+RBAC~\cite{sandhu96}   & Split           & Permission check and execution are distinct
+                                           operations \\
+ABAC~\cite{hru76}      & Split           & Attribute evaluation external to transition;
+                                           attributes may change \\
+OPA~\cite{opa}         & Split           & Policy evaluation external to state
+                                           transition \\
+Cedar~\cite{cedar}     & Split           & Authorization decision external to the
+                                           enforcing runtime \\
+OPA + Redis            & Split           & External state enriches $D$; structural gap
+                                           remains (Cor.~\ref{cor:extstate}) \\
+AWS IAM                & Split           & IAM evaluation precedes API call execution;
+                                           no shared-snapshot guarantee \\
+Kubernetes Admission   & Partially atomic & Webhook admits before object creation, but
+                                           cross-resource state (e.g., a
+                                           \texttt{ResourceQuota} modified
+                                           concurrently) is not jointly atomic with
+                                           the admission decision \\
+ACP~\cite{acp26}       & Atomic          & Decision and state mutation jointly enforced
+                                           via single-use Execution Token \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -728,6 +830,22 @@ Formally:
 \]
 where $d$ and $s'$ are determined by a single evaluate-then-mutate execution
 contract~\cite{acp26}.  ACP is an atomic decision boundary system.
+
+\paragraph{Kubernetes Admission (Partially Atomic).}
+Kubernetes admission webhooks intercept API server requests before the object
+is written to etcd, providing a form of pre-execution evaluation.  Within a
+single object's lifecycle, the webhook decision and the subsequent write to
+etcd are reasonably coupled.  However, Kubernetes does not enforce atomicity
+across resources: consider an agent Pod requesting a batch job that is
+admissible given the current \texttt{ResourceQuota} state.  Between the
+webhook's admission decision and the Pod's binding to a node, a concurrent
+namespace operation updates the \texttt{ResourceQuota} to a value that would
+have caused refusal.  The transition fires in an inadmissible cross-resource
+state.  In terms of our model, the state $s$ relevant to $\Adm$ encodes
+cluster-wide resource state; the admission decision is evaluated in $s$ but
+the execution commits in a state $s^*$ that the webhook did not observe.  The
+system is partially atomic (per-object) but split with respect to the full
+admissibility predicate over shared cluster state.
 
 % ============================================================
 \section{Discussion}
@@ -932,18 +1050,23 @@ $\Escalate$ must itself be atomic at the point of resolution.
 
 The core result is direct: \emph{admissibility is not a property of
 evaluation---it is a property of execution.}  Under
-Assumption~\ref{asm:nontrivial}, no system that separates evaluation from
-execution can guarantee admissibility at execution time; only a system that
-couples them as a single indivisible step at the decision boundary can provide
-this guarantee.
+Assumptions~\ref{asm:nontrivial} and~\ref{asm:env}, no system that separates
+evaluation from execution can guarantee admissibility at execution time; only
+a system that couples them as a single indivisible step at the decision
+boundary can provide this guarantee.
 
 This characterization serves as the formal foundation for the subsequent papers
 in this series of four.  The Agent Control Protocol~(ACP)~\cite{acp26}
-(Paper~1) instantiates the atomic decision boundary for multi-agent environments.
-The Invariant Measurement Layer~\cite{iml26} (Paper~2) operates above the
-atomic enforcement layer to detect behavioral drift that remains invisible to
-enforcement signals.  Paper~3 extends this framework to the fair allocation of
-governance decisions across competing agents.  All three rest on the structural
+(Paper~1) instantiates $F$ as a concrete atomic boundary: each agent action
+acquires a single-use Execution Token that is issued and consumed in the same
+ledger operation, ensuring that the state against which admissibility is
+evaluated is precisely the state against which the transition commits.  The
+Invariant Measurement Layer~\cite{iml26} (Paper~2) operates \emph{above} the
+atomic enforcement layer---taking atomicity as given---and detects behavioral
+drift that accumulates across sequences of individually admissible actions,
+remaining invisible to per-action enforcement signals.  Paper~3 extends the
+framework to the fair allocation of governance decisions across agents
+competing under shared resource constraints.  All three rest on the structural
 guarantee established here: that the boundary they operate relative to is, in
 fact, atomic.
 

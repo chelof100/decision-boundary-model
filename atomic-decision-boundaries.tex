@@ -65,8 +65,8 @@ execution as a labeled transition system (LTS), we distinguish two classes:
 single LTS step, and \emph{split evaluation systems}, where they are separate
 transitions that may be interleaved by environmental actions.
 
-Under our environment model (Assumptions~2.1--2.2), we prove that no
-construction can make a split system equivalent to an atomic system with
+Under realistic concurrent environments (Assumptions~2.1--2.2), we prove that
+no construction can make a split system equivalent to an atomic system with
 respect to admissibility under all execution traces.  This limitation is a
 structural property of the system architecture, not of policy expressiveness
 or state availability.  We further formalize the \Escalate{}
@@ -186,7 +186,14 @@ resource constraints.
 % ============================================================
 
 We model the execution environment as a labeled transition system and derive
-the formal definition of admissibility from it.
+the formal definition of admissibility from it.  The section is organized into
+two parts: an execution model (\S\ref{sec:execmodel}) that establishes the LTS
+and the admissibility predicate, and an environment and threat model
+(\S\ref{sec:envmodel}) that specifies the assumptions under which the main
+theorem is stated.
+
+\subsection{Execution Model}
+\label{sec:execmodel}
 
 \begin{definition}[Labeled Transition System]
 \label{def:lts}
@@ -236,6 +243,21 @@ function} that applies it.  In split systems, $D$ and $T$ are invoked
 separately.  The state in which $D$ is invoked, call it $s_{\eval}$, need not
 equal the state in which $T$ fires, call it $s_{\exec}$.  This is the
 structural source of the problem we formalize.
+
+\subsection{Environment and Threat Model}
+\label{sec:envmodel}
+
+The main theorem (Theorem~\ref{thm:main}) is a conditional result: it holds
+under a specific model of the execution environment.  We state this model
+explicitly here, as two assumptions, so that the scope of the result is
+unambiguous.  The environment model is \emph{adversarial}: the environment is
+assumed capable of interleaving state-modifying actions at the worst possible
+moment, with no synchronization guarantee for the governance system.  This is
+the standard assumption in concurrent systems analysis and corresponds to the
+worst-case deployment context for multi-agent systems operating over shared
+mutable state.  Readers who restrict to sequential or single-threaded settings
+should consult Remark~\ref{rem:scope} for the precise boundary conditions under
+which the theorem applies.
 
 \begin{assumption}[Non-Triviality]
 \label{asm:nontrivial}

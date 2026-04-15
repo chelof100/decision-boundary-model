@@ -117,10 +117,10 @@ that action are separate operations.
 
 This separation introduces a gap.  The decision is evaluated in one system
 state; the transition fires in a---potentially different---state.  An action
-admissible when evaluated may become inadmissible by execution time.  No policy,
-regardless of its sophistication, can close this gap from within a split
-architecture, because the gap is not an information problem---it is an
-architectural one.
+admissible when evaluated may become inadmissible by execution time.  Under
+the environment model we formalize in \S\ref{sec:model}, no policy, regardless
+of its sophistication, can close this gap from within a split architecture:
+the gap is not an information problem---it is an architectural one.
 
 This paper formalizes that observation precisely.  We define the
 \emph{decision boundary} of a governance system as the point at which the
@@ -328,6 +328,23 @@ such that $T(s, a)$ gives the resulting state when action $a$ is applied in
 state $s$.
 \end{definition}
 
+\begin{remark}[The role of $F$ versus composition of $D$ and $T$]
+\label{rem:fvscomp}
+One might observe that the type signature $F : S \times A \to \Dset \times S$
+is mathematically identical to the pointwise pair $(D, T)$: given $(s, a)$,
+compute $D(s,a)$ for the disposition and $T(s, a)$ for the resulting state.
+Any system---including a split one---can define such a function as a
+mathematical object.  The contribution of the Atomic Decision Boundary
+(Definition~\ref{def:atomic}) is not in the signature but in the
+\emph{indivisibility axiom}: the computation of $(d, s')$ must correspond to a
+\emph{single arc} in the LTS, exposing no intermediate state to environment
+actions.  In a split system, the same pair $(d, s')$ is eventually produced,
+but the path from $s$ to $s'$ passes through the intermediate state $s_D$
+where environment actions can interleave.  The structural difference between
+the two classes is in the topology of the LTS---specifically, whether there
+exists an intermediate state---not in the domain or codomain of the function.
+\end{remark}
+
 \subsection{Atomic Decision Boundary}
 \label{sec:atomic}
 
@@ -356,7 +373,8 @@ interleaved between the evaluation of $D(s, a)$ and the firing of $T(s, a)$.
 In terms of the LTS, the $F(s,a)$ transition is a single arc; it does not
 decompose into two separate transitions with any state in between.
 
-\begin{remark}
+\begin{remark}[Implementation independence]
+\label{rem:impl}
 Atomicity in Definition~\ref{def:atomic} is a structural property of the
 system architecture, not of any particular implementation.  Whether it is
 realized via a database transaction, a monitor lock, a hardware instruction, or
@@ -442,6 +460,21 @@ it must re-evaluate $\Adm(s_t, a)$.  Second, the resolution function
 itself is a decision point: it evaluates a disposition ($\Allow$ or $\Refuse$)
 and potentially fires a transition ($T(s_t, a)$).  This is precisely the
 structure of a decision boundary.
+
+\begin{remark}[The supervisor as a second decision system]
+\label{rem:supervisor}
+The $\Escalate$ outcome introduces a second decision point operated by an
+external supervisor, which raises a natural question: is this the same system,
+or a different one?  The model is agnostic.  The supervisor may be a human
+reviewer, an automated policy agent, or a recursive invocation of the same
+governance pipeline.  What Corollary~\ref{cor:escalate} (to follow) establishes
+is independent of this: \emph{wherever} the supervisor sits, its resolution
+function $\mathrm{resolve}$ constitutes a decision boundary of its own, and
+the same structural argument that applies to the primary boundary applies
+there.  The escalation model does not solve the atomicity problem by deferral;
+it makes explicit that the problem \emph{cannot} be avoided by deferral, only
+transferred.
+\end{remark}
 
 % ============================================================
 % Figure: split vs atomic architectures
@@ -572,8 +605,13 @@ The failure in Example~\ref{ex:violation} cannot be remedied by:
 
 \subsection{Non-Equivalence Theorem}
 
-We now prove the central result.  The theorem is stated for the general case;
-the proof is constructive via the execution trace in Example~\ref{ex:violation}.
+We now prove the central result.  Throughout this section,
+\emph{equivalence} between two systems is taken with respect to
+\emph{admissibility preservation} (Definition~\ref{def:admpres}): two systems
+are equivalent if and only if they agree on which execution traces preserve
+admissibility under all environments satisfying Assumptions~\ref{asm:nontrivial}
+and~\ref{asm:env}.  The theorem is stated for the general case; the proof is
+constructive via the execution trace in Example~\ref{ex:violation}.
 
 \begin{theorem}[Non-Equivalence of Split and Atomic Systems]
 \label{thm:main}
@@ -657,6 +695,33 @@ $\mathit{exec}(a)$---which is precisely Definition~\ref{def:atomic}---or
 indivisible step---which is again Definition~\ref{def:atomic}.  In both cases,
 the fix is the atomic boundary condition itself.
 \end{proof}
+
+\begin{remark}[Scope and boundary conditions of the impossibility]
+\label{rem:scope}
+Theorem~\ref{thm:main} is a conditional result: it holds under
+Assumptions~\ref{asm:nontrivial} and~\ref{asm:env}.  In a \emph{sequential}
+system where no concurrent environment actions occur ($k = 0$ always in
+Definition~\ref{def:split}), the trace $\sigma^*$ is unreachable and the
+gap cannot be exploited.  Similarly, if mutual exclusion is enforced at the
+operating-system or runtime level over the \emph{entire} interval between
+$\mathit{dec}(a)$ and $\mathit{exec}(a)$, the split system becomes effectively
+atomic within that exclusion scope---but this is precisely an implementation
+of the atomic boundary (see Remark~\ref{rem:impl}).
+
+Two common objections deserve direct answers.  \emph{First}: ``What about
+locks, transactions, CAS, or linearizable storage?''  These are valid
+implementation mechanisms for the atomic boundary; they are not alternatives
+to it.  A system that wraps both the decision call and the execution call inside
+a single database transaction, or acquires a lock before $\mathit{dec}(a)$ and
+releases it only after $\mathit{exec}(a)$, satisfies Definition~\ref{def:atomic}
+by construction---because no environment action can fire between the two.
+\emph{Second}: ``Isn't this just data atomicity?''  No.  Data atomicity (2PC,
+MVCC) ensures that a data record is fully written or not written at all.
+Admissibility atomicity ensures that the \emph{policy check} and the
+\emph{data write} are evaluated against the same system-state snapshot.
+A 2PC-coordinated write preceded by an OPA policy call is still a split system
+in our model (\S\ref{sec:dist}).
+\end{remark}
 
 \subsection{Corollaries}
 
@@ -797,6 +862,14 @@ execution.  RBAC implements:
 \]
 as separate operations. RBAC is a split evaluation system.
 
+\emph{Concrete trace.}  In state $s$, an agent holds the \textsc{Editor} role
+and requests $\mathit{write}(r)$.  The RBAC check returns $d = \Allow$.
+Before the write executes, an administrator revokes the role via environment
+action $e$, transitioning to $s^*$ where the agent is no longer an
+\textsc{Editor} and $\Adm(s^*, \mathit{write}(r)) = \mathsf{false}$.  The
+recorded $\Allow$ nonetheless triggers execution of $T(s^*, \mathit{write}(r))$.
+This is precisely the trace $\sigma^*$ of Theorem~\ref{thm:main}.
+
 \paragraph{Open Policy Agent (OPA).}
 OPA evaluates policies expressed in Rego against an input document.  The
 evaluation produces a decision; execution is performed externally by the
@@ -809,6 +882,16 @@ augmented with external data injected at query time (e.g., via the bundle API
 or a data source), the execution transition remains external.  By
 Corollary~\ref{cor:extstate}, this augmentation does not restore atomicity.
 OPA is a split evaluation system.
+
+\emph{Concrete trace.}  An OPA bundle is evaluated against input document
+encoding state $s$ (e.g., current API quota usage $= q < q_{\max}$) and
+returns $d = \Allow$.  Between the policy call and the application's write
+execution, a concurrent request exhausts the remaining quota, producing $s^*$
+with $\Adm(s^*, \mathit{write}) = \mathsf{false}$.  The application, holding
+the recorded $\Allow$, proceeds.  Injecting a real-time Redis data source into
+OPA narrows the window but does not close it: the Redis read is itself a
+distinct LTS transition exposed to interleaving between $\mathit{dec}(a)$
+and $\mathit{exec}(a)$ (Corollary~\ref{cor:extstate}).
 
 \paragraph{ACP (Agent Control Protocol).}
 ACP implements admission control as a stateful runtime mechanism in which

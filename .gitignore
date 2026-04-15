@@ -1,0 +1,28 @@
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.synctex(busy)
+*.pdf
+*.dvi
+
+# Editor files
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# Analysis notes (not for public repo)
+analisis chatgpt 1.md
+analisis grok 1.md
+Atomic Decision Boundaries paper 0.md
+Decision Boundary Model.md
+Decision Boundary Model brief and outline.md
+*.pdf

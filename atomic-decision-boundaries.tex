@@ -1,0 +1,961 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{microtype}
+
+% ---------- Theorem environments ----------
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{proposition}[theorem]{Proposition}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{assumption}[theorem]{Assumption}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% ---------- Notation macros ----------
+\newcommand{\Allow}{\textsc{Allow}}
+\newcommand{\Refuse}{\textsc{Refuse}}
+\newcommand{\Escalate}{\textsc{Escalate}}
+\newcommand{\Dset}{\mathcal{D}}
+\newcommand{\Adm}{\mathrm{Adm}}
+\newcommand{\Req}{\mathrm{Req}}
+\newcommand{\Traces}{\mathrm{Traces}}
+\newcommand{\eval}{\mathrm{eval}}
+\newcommand{\exec}{\mathrm{exec}}
+
+% ---------- Document ----------
+\title{Atomic Decision Boundaries: A Structural Requirement\\
+for Guaranteeing Execution-Time Admissibility in Autonomous Systems}
+
+\author{Marcelo Fernandez\\
+TraslaIA\\
+\texttt{info@traslaia.com}}
+
+\date{April 2026 \quad (Draft)}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Autonomous systems increasingly execute actions that directly modify shared state,
+creating an urgent need for precise control over which transitions are permitted
+to occur.  Existing governance mechanisms evaluate policies prior to execution or
+reconstruct behavior post hoc, but do not enforce admissibility at the exact
+moment a state transition is committed.
+
+We introduce the \emph{atomic decision boundary}, a structural property of
+admission control systems in which the decision and the resulting state
+transition are jointly determined as a single indivisible step.  Formalizing
+execution as a labeled transition system (LTS), we distinguish two classes:
+\emph{atomic systems}, where evaluation and transition are coupled within a
+single LTS step, and \emph{split evaluation systems}, where they are separate
+transitions that may be interleaved by environmental actions.
+
+We prove that no construction can make a split system equivalent to an atomic
+system with respect to admissibility under all execution traces.  This
+limitation is a structural property of the system architecture, not of policy
+expressiveness or state availability.  We further formalize the \Escalate{}
+outcome---absent from classical time-of-check/time-of-use (TOCTOU) analyses---
+and show that its resolution is itself subject to the atomic boundary
+requirement, extending the guarantees of the main theorem.
+
+We map widely used policy enforcement mechanisms, including RBAC and Open
+Policy Agent~(OPA), to the split model, and contrast them with systems that
+enforce atomic decision boundaries.  Our results establish that admissibility
+is a property of execution, not of prior evaluation, and that guaranteeing it
+requires structural guarantees at the decision boundary.
+\end{abstract}
+
+% ============================================================
+\section{Introduction}
+\label{sec:intro}
+% ============================================================
+
+Autonomous systems are increasingly deployed in settings where they plan and
+execute multi-step action sequences that directly and irreversibly modify system
+state.  Financial transfers, document operations, API calls, and inter-agent
+delegations all commit changes that cannot simply be rolled back.  As a result,
+the question of whether a given action should be allowed to execute must be
+resolved precisely at the moment the transition is committed---not before, and
+not after.
+
+Current governance approaches address this question indirectly.  \emph{Policy
+engines} evaluate rules against input data prior to execution.  \emph{Access
+control models} determine permissions based on static role or attribute
+assignments.  \emph{Audit systems} reconstruct behavior after the fact.
+These mechanisms are useful and widely deployed, but they share a structural
+limitation: the decision to allow an action and the transition that applies
+that action are separate operations.
+
+This separation introduces a gap.  The decision is evaluated in one system
+state; the transition fires in a---potentially different---state.  An action
+admissible when evaluated may become inadmissible by execution time.  No policy,
+regardless of its sophistication, can close this gap from within a split
+architecture, because the gap is not an information problem---it is an
+architectural one.
+
+This paper formalizes that observation precisely.  We define the
+\emph{decision boundary} of a governance system as the point at which the
+system resolves whether a state transition $(s \to s')$ is permitted to exist.
+We then define an \emph{atomic decision boundary} as one in which the
+resolution and the resulting transition are jointly computed as a single
+indivisible step in the labeled transition system model of execution.
+
+We prove that systems lacking atomicity at the decision boundary---henceforth
+\emph{split evaluation systems}---cannot guarantee admissibility at execution
+time under all execution traces.  The impossibility is constructive: we exhibit
+a concrete execution trace that witnesses the gap.
+
+A distinguishing feature of our model is the three-valued decision domain
+$\Dset = \{\Allow, \Refuse, \Escalate\}$.  The $\Escalate$ outcome, absent
+from classical TOCTOU analyses~\cite{bishop96, tsafrir08}, corresponds to
+suspension of the transition pending supervisor review---a first-class governance
+action in modern agent systems~\cite{acp26}.  We show that $\Escalate$ does
+not eliminate the atomicity requirement; it \emph{transfers} it to the
+resolution step, and prove that the same structural gap arises there unless
+resolution is itself atomic.
+
+\paragraph{Contributions.}
+\begin{enumerate}[label=\normalfont(\roman*)]
+  \item We formalize the execution model for admission control as an LTS and
+    define admissibility as a property of state transitions, not of actions
+    in isolation (\S\ref{sec:model}).
+
+  \item We define the \emph{atomic decision boundary} in LTS terms and
+    contrast it with \emph{split evaluation systems} via a precise structural
+    distinction (\S\ref{sec:dbm}).
+
+  \item We give a complete formal semantics for the $\Escalate$ outcome,
+    including the supervisor resolution function and the state it operates
+    over (\S\ref{sec:dbm}).
+
+  \item We prove, via a constructive counterexample trace, that no general
+    construction can make a split system equivalent to an atomic system with
+    respect to admissibility (\S\ref{sec:results}).  Three corollaries
+    follow: impossibility of execution-time guarantees in split systems,
+    insufficiency of external state, and admissibility as an execution-time
+    property.
+
+  \item We prove the \emph{escalation closure requirement}: the $\Escalate$
+    outcome preserves admissibility guarantees if and only if the supervisor
+    resolution is itself atomic (\S\ref{sec:results}).
+
+  \item We map RBAC, OPA, and ACP to the two classes, providing a structural
+    taxonomy of existing governance mechanisms (\S\ref{sec:mapping}).
+\end{enumerate}
+
+This paper is Paper~0 in a series of four.  The Agent Control Protocol~(ACP)~\cite{acp26}
+(Paper~1) instantiates the atomic decision boundary for multi-agent governance.
+The Invariant Measurement Layer~(IML)~\cite{iml26} (Paper~2) operates above the
+atomic enforcement layer and addresses behavioral drift that remains invisible
+to enforcement-based monitoring.  Paper~3 (in preparation) addresses the fair
+allocation of atomic governance decisions across agents operating under shared
+resource constraints.
+
+% ============================================================
+\section{System Model}
+\label{sec:model}
+% ============================================================
+
+We model the execution environment as a labeled transition system and derive
+the formal definition of admissibility from it.
+
+\begin{definition}[Labeled Transition System]
+\label{def:lts}
+A \emph{labeled transition system} (LTS) is a triple $M = (S, \mathrm{Act}, {\to})$ where:
+\begin{itemize}
+  \item $S$ is a set of \emph{states};
+  \item $\mathrm{Act} = A \cup A_{\mathrm{env}}$ is a set of \emph{action labels},
+    partitioned into \emph{agent actions} $A$ (subject to governance) and
+    \emph{environment actions} $A_{\mathrm{env}}$ (external state modifications),
+    with $A \cap A_{\mathrm{env}} = \emptyset$;
+  \item ${\to} \subseteq S \times \mathrm{Act} \times S$ is the
+    \emph{transition relation}.
+\end{itemize}
+We write $s \xrightarrow{a} s'$ for $(s, a, s') \in {\to}$.
+\end{definition}
+
+\begin{definition}[Execution Trace]
+\label{def:trace}
+An \emph{execution trace} $\sigma$ is a finite alternating sequence
+$s_0\, a_1\, s_1\, a_2\, s_2 \cdots a_n\, s_n$
+such that $s_{i-1} \xrightarrow{a_i} s_i$ for all $i \in \{1, \ldots, n\}$.
+We denote the set of all execution traces of $M$ by $\Traces(M)$.
+\end{definition}
+
+\begin{definition}[Admissibility]
+\label{def:adm}
+An \emph{admissibility predicate} is a function
+$\Adm : S \times A \to \{\mathsf{true}, \mathsf{false}\}$.
+Action $a \in A$ is \emph{admissible} in state $s \in S$ if $\Adm(s, a) = \mathsf{true}$.
+Admissibility is a property of the state at the moment of transition, not of
+the action in isolation.
+\end{definition}
+
+\begin{definition}[Admissibility-Preserving System]
+\label{def:admpres}
+A system $M$ \emph{preserves admissibility} if for every trace
+$\sigma \in \Traces(M)$ and every agent action $a \in A$ appearing in $\sigma$,
+whenever $s \xrightarrow{a} s'$ occurs in $\sigma$, we have $\Adm(s, a) = \mathsf{true}$.
+\end{definition}
+
+\paragraph{The evaluation--execution gap.}
+In many practical systems, deciding whether to allow an action and applying
+the resulting transition are implemented as distinct operations.  Let $D : S
+\times A \to \Dset$ denote the \emph{decision function} that evaluates
+admissibility, and let $T : S \times A \to S$ denote the \emph{transition
+function} that applies it.  In split systems, $D$ and $T$ are invoked
+separately.  The state in which $D$ is invoked, call it $s_{\eval}$, need not
+equal the state in which $T$ fires, call it $s_{\exec}$.  This is the
+structural source of the problem we formalize.
+
+\begin{assumption}[Non-Triviality]
+\label{asm:nontrivial}
+The system satisfies the following:
+\begin{enumerate}[label=(\roman*)]
+  \item There exist $s \in S$ and $a \in A$ with $\Adm(s, a) = \mathsf{true}$.
+  \item There exist $s \in S$, $a \in A$, and $e \in A_{\mathrm{env}}$ such that
+    $s \xrightarrow{e} s^*$ and $\Adm(s^*, a) = \mathsf{false}$.
+\end{enumerate}
+\end{assumption}
+
+Assumption~\ref{asm:nontrivial} is satisfied by any system where admissibility
+genuinely depends on state.  A governance mechanism over a state-independent
+system provides no meaningful constraint; a system whose state cannot change
+between decision and execution is already effectively atomic.  In practice,
+every multi-agent system operating over shared mutable state---including file
+systems, API quota registries, agent delegation ledgers, and shared databases---
+satisfies both conditions: actions can be admitted and state can be modified
+by concurrent environment processes between evaluation and execution.
+
+\begin{example}[Running Example]
+\label{ex:running}
+An agent manages file operations on a shared resource.  The state $s$ encodes
+the set of locked files $\mathit{locked}(s) \subseteq \mathcal{F}$ and the
+current quota usage $\mathit{quota}(s) \in \mathbb{N}$.  Action $\mathit{write}(f)$
+is admissible in $s$ iff $f \notin \mathit{locked}(s)$ and
+$\mathit{quota}(s) < \mathit{quota}_{\max}$.  Environment action
+$\mathit{lock}(f)$ transitions any state $s$ to state $s^* = s[\mathit{locked}
+\mapsto \mathit{locked}(s) \cup \{f\}]$, making $\mathit{write}(f)$ inadmissible.
+Assumption~\ref{asm:nontrivial} is satisfied.
+\end{example}
+
+% ============================================================
+\section{The Decision Boundary Model}
+\label{sec:dbm}
+% ============================================================
+
+\subsection{Decision and Transition Functions}
+
+\begin{definition}[Decision Domain]
+Let $\Dset = \{\Allow, \Refuse, \Escalate\}$.  We call elements of $\Dset$
+\emph{dispositions}.
+\end{definition}
+
+\begin{definition}[Decision Function]
+\label{def:decfun}
+A \emph{decision function} is a mapping
+$D : S \times A \to \Dset$
+that assigns a disposition to each (state, action) pair.  We say $D$ is
+\emph{consistent with} $\Adm$ if:
+$D(s, a) = \Allow \Rightarrow \Adm(s, a)$ and
+$D(s, a) = \Refuse \Rightarrow \neg\Adm(s, a)$.
+\end{definition}
+
+\begin{definition}[Transition Function]
+\label{def:transfun}
+A \emph{transition function} is a mapping
+$T : S \times A \to S$
+such that $T(s, a)$ gives the resulting state when action $a$ is applied in
+state $s$.
+\end{definition}
+
+\subsection{Atomic Decision Boundary}
+\label{sec:atomic}
+
+\begin{definition}[Atomic Decision Boundary]
+\label{def:atomic}
+A system satisfies an \emph{atomic decision boundary} if there exists a
+function
+\[
+  F : S \times A \to \Dset \times S
+\]
+such that for every $(s, a) \in S \times A$:
+\begin{align}
+  F(s, a) &= (d,\, s') \label{eq:atomic-pair}\\
+  d &= D(s, a) \label{eq:atomic-decision}\\
+  s' &= T(s, a) \quad \text{if } d = \Allow \label{eq:atomic-transition}\\
+  s' &= s \quad \text{if } d = \Refuse \label{eq:atomic-refuse}
+\end{align}
+and the computation of $d$ and $s'$ corresponds to a \emph{single indivisible
+transition} in the LTS: $s \xrightarrow{F(s,a)} s'$ with no intermediate
+state between the evaluation of $d$ and the determination of $s'$.
+\end{definition}
+
+The indivisibility condition in Definition~\ref{def:atomic} is a model-level
+axiom: it asserts that no environment action $e \in A_{\mathrm{env}}$ can be
+interleaved between the evaluation of $D(s, a)$ and the firing of $T(s, a)$.
+In terms of the LTS, the $F(s,a)$ transition is a single arc; it does not
+decompose into two separate transitions with any state in between.
+
+\begin{remark}
+Atomicity in Definition~\ref{def:atomic} is a structural property of the
+system architecture, not of any particular implementation.  Whether it is
+realized via a database transaction, a monitor lock, a hardware instruction, or
+a protocol contract is an implementation matter.  The definition abstracts over
+all of these and asserts only that the LTS representation of the system does
+not expose an intermediate state.
+\end{remark}
+
+\subsection{Split Evaluation Systems}
+\label{sec:split}
+
+\begin{definition}[Split Evaluation System]
+\label{def:split}
+A system is a \emph{split evaluation system} if the decision function $D$ and
+the transition function $T$ are evaluated as distinct LTS transitions,
+potentially separated by environment actions.  Formally, the execution of
+agent action $a$ from state $s$ decomposes into:
+\begin{enumerate}[label=(\arabic*)]
+  \item A \emph{decision transition}: $s \xrightarrow{\mathit{dec}(a)} s_D$,
+    where $s_D$ encodes the recorded disposition $d = D(s, a)$ alongside the
+    current state.
+  \item An optional sequence of environment transitions:
+    $s_D \xrightarrow{e_1} \cdots \xrightarrow{e_k} s^*$, for $k \geq 0$.
+  \item An \emph{execution transition}: $s^* \xrightarrow{\mathit{exec}(a)}
+    T(s^*, a)$, contingent on $d = \Allow$.
+\end{enumerate}
+The states $s$ (evaluation state) and $s^*$ (execution state) may differ
+whenever $k \geq 1$.
+\end{definition}
+
+The structural distinction between atomic and split systems is not a matter of
+policy expressiveness, state availability, or evaluation latency.  It is a
+matter of whether the LTS exposes an intermediate state between decision and
+execution.  In atomic systems it does not; in split systems it does.
+
+\subsection{Escalation Semantics}
+\label{sec:escalate}
+
+The $\Escalate$ disposition is structurally distinct from $\Refuse$: rather
+than terminating the request, it suspends the transition pending external
+review.  This outcome has no counterpart in classical TOCTOU analyses, which
+operate in binary (permit/deny) models.  We give it a precise semantics.
+
+\begin{definition}[Escalation State]
+\label{def:escstate}
+Let $\Req = \mathcal{P}_{\mathrm{fin}}(S \times A)$ denote the set of finite
+sets of \emph{pending requests}.  The \emph{escalation-extended state space}
+is $\hat{S} = S \times \Req$.  A state $\hat{s} = (s, P) \in \hat{S}$
+encodes the current system state $s$ together with the set $P$ of pending
+(state, action) pairs awaiting supervisor resolution.
+\end{definition}
+
+\begin{definition}[Escalation Transition]
+\label{def:esctrans}
+When $F(s, a) = (\Escalate, \hat{s}')$, the system transitions to
+\[
+  \hat{s}' = \bigl(s,\; P \cup \{(s, a)\}\bigr),
+\]
+recording the pending request $(s, a)$ with the originating state $s$, while
+leaving the system state unchanged.  No transition of $T$ fires.
+\end{definition}
+
+\begin{definition}[Supervisor Resolution Function]
+\label{def:resolve}
+The \emph{resolution function} $\mathrm{resolve} : \hat{S} \times (S \times A)
+\times \{{\Allow, \Refuse}\} \to \hat{S}$ is defined by:
+\begin{align}
+  \mathrm{resolve}\bigl((s_t, P),\; (s_{\mathrm{orig}}, a),\; \Allow\bigr)
+    &= \bigl(T(s_t, a),\; P \setminus \{(s_{\mathrm{orig}}, a)\}\bigr)
+    \label{eq:res-allow}\\
+  \mathrm{resolve}\bigl((s_t, P),\; (s_{\mathrm{orig}}, a),\; \Refuse\bigr)
+    &= \bigl(s_t,\; P \setminus \{(s_{\mathrm{orig}}, a)\}\bigr)
+    \label{eq:res-refuse}
+\end{align}
+where $s_t$ is the \emph{current} system state at resolution time, which may
+differ from $s_{\mathrm{orig}}$.
+\end{definition}
+
+Two observations are immediate.  First, when $\Allow$ is issued at resolution,
+$T$ fires in state $s_t$, not $s_{\mathrm{orig}}$.  The supervisor therefore
+cannot rely on the admissibility evaluation performed in $s_{\mathrm{orig}}$;
+it must re-evaluate $\Adm(s_t, a)$.  Second, the resolution function
+itself is a decision point: it evaluates a disposition ($\Allow$ or $\Refuse$)
+and potentially fires a transition ($T(s_t, a)$).  This is precisely the
+structure of a decision boundary.
+
+% ============================================================
+\section{The Failure of Split Systems}
+\label{sec:failure}
+% ============================================================
+
+Before stating the main theorem, we illustrate the failure mode concretely.
+
+\begin{example}[Admissibility Violation in a Split System]
+\label{ex:violation}
+Return to Example~\ref{ex:running}.  The following three-step trace witnesses
+the failure (steps correspond to those in the proof of Theorem~\ref{thm:main}):
+\begin{enumerate}
+  \item[\textbf{(1)}] The system is in state $s$ with $f \notin \mathit{locked}(s)$.
+    The agent requests $\mathit{write}(f)$; the split system evaluates
+    $D(s, \mathit{write}(f)) = \Allow$ and records the decision.
+  \item[\textbf{(2)}] Before execution fires, another agent issues $\mathit{lock}(f)$,
+    an environment action that transitions $s \to s^*$ with
+    $f \in \mathit{locked}(s^*)$.
+  \item[\textbf{(3)}] The original decision ($\Allow$) is already recorded.  The
+    execution transition $\mathit{exec}(\mathit{write}(f))$ fires in $s^*$,
+    applying $T(s^*, \mathit{write}(f))$.
+\end{enumerate}
+At the moment of execution, $\Adm(s^*, \mathit{write}(f)) = \mathsf{false}$:
+the file is locked.  The split system has executed an inadmissible transition.
+
+In contrast, an atomic system would evaluate $F(s^*, \mathit{write}(f))$ at
+the moment of the transition and obtain $(\Refuse, s^*)$, preventing the
+inadmissible execution.
+\end{example}
+
+The failure in Example~\ref{ex:violation} cannot be remedied by:
+\begin{itemize}
+  \item \textbf{Richer policies.}  The decision function $D$ already
+    produces the correct result for every state it is given.  The problem is
+    that it is given $s$, not $s^*$.
+
+  \item \textbf{External state.}  Adding an external store (e.g., a shared
+    lock registry read by $D$) reduces the window in which the gap can be
+    exploited but does not reduce it to zero.  The store must be read before
+    $T$ fires; between that read and the firing of $T$, the store can be
+    updated.
+
+  \item \textbf{Re-evaluation before execution.}  If the system re-evaluates
+    $D$ immediately before firing $T$, the re-evaluation and the execution are
+    themselves two separate transitions---which is exactly the structure of a
+    split system.  Unless the re-evaluation and the execution are jointly
+    atomic, the gap is merely shifted, not closed.
+\end{itemize}
+
+% ============================================================
+\section{Main Results}
+\label{sec:results}
+% ============================================================
+
+\subsection{Non-Equivalence Theorem}
+
+We now prove the central result.  The theorem is stated for the general case;
+the proof is constructive via the execution trace in Example~\ref{ex:violation}.
+
+\begin{theorem}[Non-Equivalence of Split and Atomic Systems]
+\label{thm:main}
+Let $M_{\mathrm{split}}$ be any split evaluation system and let
+$M_{\mathrm{atom}}$ be any atomic decision boundary system, both defined
+over the same state space $S$, action set $A$, environment actions
+$A_{\mathrm{env}}$, admissibility predicate $\Adm$, and transition function
+$T$.  Under Assumption~\ref{asm:nontrivial}, there exists an execution trace
+$\sigma^* \in \Traces(M_{\mathrm{split}})$ such that:
+\begin{enumerate}[label=(\roman*)]
+  \item $\sigma^*$ contains a transition $s^* \xrightarrow{\mathit{exec}(a)}
+    T(s^*, a)$ with $\Adm(s^*, a) = \mathsf{false}$.
+  \item No corresponding trace exists in $\Traces(M_{\mathrm{atom}})$ that
+    commits $T(\cdot, a)$ in a state where $\Adm(\cdot, a) = \mathsf{false}$.
+\end{enumerate}
+Consequently, $M_{\mathrm{split}}$ does not preserve admissibility, while
+$M_{\mathrm{atom}}$ does.
+\end{theorem}
+
+\begin{proof}
+By Assumption~\ref{asm:nontrivial}(i), there exist $s \in S$ and $a \in A$
+with $\Adm(s, a) = \mathsf{true}$.  By Assumption~\ref{asm:nontrivial}(ii),
+there exists $e \in A_{\mathrm{env}}$ and $s^* \in S$ with $s \xrightarrow{e}
+s^*$ and $\Adm(s^*, a) = \mathsf{false}$.
+
+\paragraph{Constructing $\sigma^*$.}
+Consider the following trace in $M_{\mathrm{split}}$:
+\[
+  \sigma^* :\quad
+  s \;\xrightarrow{\mathit{dec}(a)}\; s_D
+    \;\xrightarrow{e}\; s^*
+    \;\xrightarrow{\mathit{exec}(a)}\; T(s^*, a).
+\]
+\begin{enumerate}
+  \item The decision transition $\mathit{dec}(a)$ fires in state $s$.  Since
+    $\Adm(s, a) = \mathsf{true}$ and $D$ is consistent with $\Adm$
+    (Definition~\ref{def:decfun}), we have $D(s, a) = \Allow$.  The system
+    records $\Allow$ and transitions to $s_D$ (encoding the recorded decision
+    alongside the current state; the underlying system state is still $s$).
+
+  \item The environment transition $e$ fires, producing $s^*$ with
+    $\Adm(s^*, a) = \mathsf{false}$.
+
+  \item The execution transition $\mathit{exec}(a)$ fires in $s^*$.  In
+    $M_{\mathrm{split}}$, execution is triggered by the recorded disposition
+    $\Allow$, which was evaluated in $s$.  The split system applies
+    $T(s^*, a)$, yielding the inadmissible transition.
+\end{enumerate}
+
+By construction, $\sigma^* \in \Traces(M_{\mathrm{split}})$ (all three
+transitions are valid in a split system), and the transition at step~(3) is
+inadmissible in $s^*$.  This establishes~(i).
+
+\paragraph{Atomic system behavior.}
+In $M_{\mathrm{atom}}$, the agent action $a$ corresponds to a single
+indivisible LTS transition $F(s', a)$ from whatever state $s'$ holds at the
+moment the agent acts.
+
+If the agent acts \emph{before} the environment transition $e$ fires (system
+in state $s$): $F(s, a) = (\Allow, T(s, a))$.  The transition completes
+atomically; $e$ cannot interleave \emph{within} the single LTS step.  The
+resulting state is $T(s, a)$, produced from $s$ where $\Adm(s, a)$ holds.
+
+If the agent acts \emph{after} $e$ fires (system in state $s^*$):
+$F(s^*, a) = (\Refuse, s^*)$, since $\Adm(s^*, a) = \mathsf{false}$ and $D$
+is consistent with $\Adm$.  No transition of $T$ fires.
+
+In neither case does $M_{\mathrm{atom}}$ commit $T(\cdot, a)$ in a state
+where admissibility fails.  This establishes~(ii).
+
+\paragraph{Conclusion.}
+$M_{\mathrm{split}}$ produces an inadmissible transition under $\sigma^*$;
+$M_{\mathrm{atom}}$ does not.  No construction can equate the two systems
+with respect to admissibility preservation under all traces, because any
+construction that closes the gap for $\sigma^*$ must either (a) prevent
+environment actions from interleaving between $\mathit{dec}(a)$ and
+$\mathit{exec}(a)$---which is precisely the atomic boundary condition---or
+(b) re-evaluate $D$ at execution time atomically with $T$---which is again
+the atomic boundary condition.
+\end{proof}
+
+\subsection{Corollaries}
+
+\begin{corollary}[Impossibility of Execution-Time Guarantees in Split Systems]
+\label{cor:impossibility}
+A split evaluation system cannot guarantee admissibility at execution time
+under all execution traces.
+\end{corollary}
+
+\begin{proof}
+Immediate from Theorem~\ref{thm:main}: the trace $\sigma^*$ is a
+constructive witness to a violation.  Since $\sigma^*$ is a valid trace of
+any split system satisfying Assumption~\ref{asm:nontrivial}, no such system
+can claim universal admissibility preservation.
+\end{proof}
+
+\begin{corollary}[External State Does Not Restore Atomicity]
+\label{cor:extstate}
+Augmenting a split system with access to external state does not restore
+equivalence with an atomic system unless evaluation and the resulting
+state transition are jointly enforced as a single indivisible step.
+\end{corollary}
+
+\begin{proof}
+External state enriches the domain of the decision function $D$: let
+$D' : S \times A \times \mathcal{E} \to \Dset$ where $\mathcal{E}$ is the
+external state.  The augmented system still decomposes into a decision
+transition (invoking $D'$ with the external state read at that moment) and a
+subsequent execution transition.  The environment action $e$ in $\sigma^*$ may
+act on the external state or the system state between these transitions; the
+structural gap is unchanged.  Formally, $D'(s, a, \epsilon)$ with
+$\epsilon = \epsilon_s$ (the external state corresponding to $s$) may return
+$\Allow$, while by the time $T$ fires the external state has evolved to
+$\epsilon_{s^*}$ reflecting the lock acquired by $e$.  The gap in
+$\sigma^*$ is not closed.  Atomic coupling of $D'$ and $T$ is required.
+\end{proof}
+
+\begin{corollary}[Admissibility is a Property of Execution]
+\label{cor:execprop}
+Admissibility cannot be reduced to a property of evaluation alone; it is a
+property of the state at the moment the transition is committed.
+\end{corollary}
+
+\begin{proof}
+In the trace $\sigma^*$, the same action $a$ is admissible in state $s$
+(evaluation state) and inadmissible in state $s^*$ (execution state).  Since
+execution commits the transition in $s^*$, admissibility must be determined
+with respect to $s^*$.  Any governance guarantee that is computed only at
+$s$ is therefore insufficient.
+\end{proof}
+
+\subsection{The Escalation Closure Requirement}
+
+\begin{corollary}[Escalation Closure Requirement]
+\label{cor:escalate}
+An $\Escalate$ outcome preserves the atomic decision boundary guarantee if
+and only if the supervisor resolution function $\mathrm{resolve}$ is itself
+atomic: the evaluation of $\Adm(s_t, a)$ at resolution time and the
+application of $T(s_t, a)$ must be jointly determined as a single indivisible
+step.
+\end{corollary}
+
+\begin{proof}
+Let the system issue $\Escalate$ for action $a$ in state $s$, recording the
+pending request $(s, a)$ per Definition~\ref{def:esctrans}.
+
+\emph{(Necessity.)}  Suppose $\mathrm{resolve}$ is split: the supervisor
+evaluates $D(s_t, a)$ in state $s_t$, and then fires $T$ separately.  By
+Theorem~\ref{thm:main} applied to the resolution sub-process (with
+$s_t$ as the initial evaluation state and a potential environment action $e'$
+before $T$ fires), there exists a trace in which the supervisor's $\Allow$
+is computed in $s_t$ but $T$ fires in $s^{**}$ with $\Adm(s^{**}, a) =
+\mathsf{false}$.  Thus, $\mathrm{resolve}$ admits an inadmissible transition.
+
+\emph{(Sufficiency.)}  Suppose $\mathrm{resolve}$ is atomic: the evaluation
+$D(s_t, a)$ and the application $T(s_t, a)$ are a single indivisible step in
+the LTS.  Then by Definition~\ref{def:atomic} applied to $\mathrm{resolve}$,
+the resolution satisfies the atomic decision boundary condition, and
+Theorem~\ref{thm:main} guarantees no inadmissible transition at resolution.
+\end{proof}
+
+Corollary~\ref{cor:escalate} has an important practical consequence: the
+$\Escalate$ outcome does not relax the atomicity obligation; it \emph{transfers}
+it from the primary enforcement point to the supervisor.  A chain of escalations
+each requiring their own atomic resolution corresponds precisely to the notion
+of a supervisory hierarchy in discrete event systems~\cite{ramadge87}.
+
+% ============================================================
+\section{Mapping to Existing Systems}
+\label{sec:mapping}
+% ============================================================
+
+Table~\ref{tab:mapping} classifies common governance mechanisms according to
+the distinction established in \S\ref{sec:dbm}.  The classification is
+structural and does not reflect comparisons of expressiveness or performance.
+
+\begin{table}[h]
+\centering
+\caption{Structural classification of existing governance mechanisms.}
+\label{tab:mapping}
+\begin{tabular}{lll}
+\toprule
+\textbf{System} & \textbf{Class} & \textbf{Basis for classification} \\
+\midrule
+RBAC~\cite{sandhu96} & Split & Permissions evaluated separately from execution \\
+OPA~\cite{opa}        & Split & Policy evaluation external to transition \\
+OPA + Redis           & Split & External state enriches $D$; gap remains (Cor.~\ref{cor:extstate}) \\
+Kubernetes Admission  & Partially atomic & Webhook admits before object creation,
+                                           but out-of-band \\
+ACP~\cite{acp26}      & Atomic & Decision and state mutation jointly enforced \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Role-Based Access Control (RBAC).}
+RBAC assigns permissions to roles and roles to principals.  At access time,
+the system evaluates whether the requesting principal holds a role that
+permits the requested operation.  The evaluation produces a disposition;
+the operation is then executed by the application.  The RBAC system has no
+mechanism to ensure that the role assignment---or the system state on which
+the permission check depends---remains unchanged between evaluation and
+execution.  RBAC implements:
+\[
+  d = D_{\mathrm{RBAC}}(s, a), \quad s' = T(s, a),
+\]
+as separate operations. RBAC is a split evaluation system.
+
+\paragraph{Open Policy Agent (OPA).}
+OPA evaluates policies expressed in Rego against an input document.  The
+evaluation produces a decision; execution is performed externally by the
+calling system.  In its standard deployment model:
+\[
+  d = D_{\mathrm{OPA}}(s, a),
+\]
+with $T(s, a)$ executed outside the policy engine.  Even when OPA is
+augmented with external data injected at query time (e.g., via the bundle API
+or a data source), the execution transition remains external.  By
+Corollary~\ref{cor:extstate}, this augmentation does not restore atomicity.
+OPA is a split evaluation system.
+
+\paragraph{ACP (Agent Control Protocol).}
+ACP implements admission control as a stateful runtime mechanism in which
+the decision and state mutation are jointly enforced at the execution
+boundary~\cite{acp26}.  Each agent action must obtain an Execution Token---a
+single-use cryptographic proof of admission---before the action is permitted
+to proceed.  The token is issued and consumed atomically relative to the
+ledger state, ensuring that the system state against which admissibility is
+evaluated is the same state against which the transition commits.
+
+ACP further implements the $\Escalate$ outcome as a pending-review state
+tracked in the Audit Ledger (ACP-LEDGER-1.3), where subsequent resolution
+passes through the same admission pipeline.  By Corollary~\ref{cor:escalate},
+this satisfies the escalation closure requirement.
+
+Formally:
+\[
+  F_{\mathrm{ACP}}(s, a) = (d, s'),
+\]
+where $d$ and $s'$ are determined by a single evaluate-then-mutate execution
+contract~\cite{acp26}.  ACP is an atomic decision boundary system.
+
+% ============================================================
+\section{Discussion}
+\label{sec:discussion}
+% ============================================================
+
+\subsection{Relationship to Distributed Transactions}
+\label{sec:dist}
+
+Two-phase commit (2PC) and multiversion concurrency control (MVCC) achieve
+atomicity for \emph{data transitions}: they ensure that a database record is
+either fully updated or not updated at all.  This is a different plane from
+the admissibility atomicity we define.
+
+Admissibility is a predicate over the system state at transition time; its
+enforcement requires that the policy check and the transition commit occur in
+the same snapshot of that state.  2PC coordinates multiple data stores to
+commit together; it does not ensure that the policy check preceding the
+commit was evaluated in the same snapshot.  A system can run an OPA policy
+check followed by a 2PC-coordinated database update and still be a split
+system in our model: the OPA call and the 2PC commit are separate operations
+with an exploitable window between them.
+
+An atomic decision boundary requires that the policy evaluation and the state
+commit are \emph{the same operation}---not merely that they are coordinated.
+
+\paragraph{Relationship to linearizability.}
+Linearizability~\cite{herlihy90} is the standard correctness criterion for
+concurrent objects: an operation appears to take effect instantaneously at
+some point between its invocation and its response.  This is a property of
+\emph{data operations} on shared objects.  The atomic decision boundary
+operates at a distinct level of abstraction: it is a property of
+\emph{governance decisions} over state transitions.
+
+A linearizable data store guarantees that each read or write appears atomic
+in isolation; it does not guarantee that a policy check and the write it
+governs were evaluated against the same state snapshot.  A system that runs a
+policy evaluation followed by a linearizable write is still a split system in
+our model: the policy call and the write are separate operations with an
+exploitable window between them.
+
+These are complementary guarantees, not competing ones.  A system achieves
+the atomic decision boundary by implementing the policy check and the
+resulting state transition as a \emph{single} linearizable operation---
+precisely collapsing the gap.  Linearizability specifies what it means for a
+single operation to be atomic; the atomic decision boundary specifies
+\emph{which operations must be made atomic together}.
+
+\subsection{What Atomicity Does Not Prescribe}
+
+Our results characterize a \emph{necessary} structural condition for
+admissibility guarantees.  They do not:
+\begin{itemize}
+  \item prescribe a specific implementation of the atomic boundary (hardware
+    CAS, database transaction, protocol contract, or otherwise);
+  \item claim that atomic systems are immune to all governance failures---
+    behavioral drift operating below the enforcement threshold is addressed
+    separately~\cite{iml26};
+  \item argue that split systems have no valid use.  Split systems can
+    provide probabilistic assurance, reduce latency, or serve in contexts
+    where admissibility is defined conservatively.  The theorem establishes
+    only that they cannot provide the universal guarantee.
+\end{itemize}
+
+\subsection{Concurrency Models}
+
+The trace $\sigma^*$ in Theorem~\ref{thm:main} assumes an adversarial
+environment: the environment action $e$ is assumed to be able to fire between
+$\mathit{dec}(a)$ and $\mathit{exec}(a)$.  In a stochastic model, $e$ fires
+with some probability $p > 0$; the guarantee degrades from universal to
+probabilistic.  In a sequential model where no concurrency is possible, the
+gap does not arise.  The relevance of Theorem~\ref{thm:main} is therefore
+proportional to the degree of concurrency in the deployment environment.  For
+modern multi-agent systems operating over shared state, $p > 0$ is the
+realistic assumption.
+
+\subsection{Relationship to Formal Verification}
+
+TLA+ and other model-checking frameworks verify safety and liveness properties
+of system models.  In a TLA+ model of a split system, the gap in $\sigma^*$
+can be made explicit: if environment actions are part of the model, the
+checker will find traces that violate admissibility invariants.  This paper
+provides the structural characterization that motivates where to look and why
+no refinement of the split architecture can eliminate the counterexample trace.
+The ACP specification~\cite{acp26} is model-checked with TLC and verifies
+safety invariants that hold precisely because ACP enforces an atomic boundary.
+
+% ============================================================
+\section{Related Work}
+\label{sec:related}
+% ============================================================
+
+\paragraph{Time-of-Check/Time-of-Use (TOCTOU).}
+The TOCTOU pattern---in which a security check and the operation it governs
+are separated in time---has been studied extensively in operating systems
+security~\cite{bishop96, tsafrir08}.  The classic form involves a file system
+race: a process checks file permissions and then opens the file; an attacker
+replaces the file between check and open.  Our model generalizes TOCTOU from
+OS primitives to governance systems, with three key extensions.
+
+First, we operate at the level of \emph{state transitions} rather than file
+handles: the relevant state is the full system state encoding all properties
+on which admissibility depends, not merely a permission bit.  Second, we add
+the $\Escalate$ outcome, which TOCTOU analyses do not consider.  Classical
+TOCTOU mitigation strategies (e.g., using \texttt{openat} or atomic
+rename) work by removing the gap; our framework shows that the same principle
+applies to governance systems and that the gap cannot be closed by
+re-evaluation alone.  Third, we provide a positive characterization of systems
+that are immune to the gap (atomic systems), not only a characterization of
+vulnerable systems.
+
+\paragraph{Supervisory Control of Discrete Event Systems.}
+Ramadge and Wonham~\cite{ramadge87} introduced the formal theory of
+supervisory control, in which a supervisor enables or disables events in a
+plant modeled as a DES.  Their framework distinguishes controllable events
+(which the supervisor can prevent) from uncontrollable events (which it
+cannot).  Our framework is related: agent actions correspond to controllable
+events; environment actions correspond to uncontrollable ones.  The
+$\Escalate$ outcome corresponds to the supervisor suspending a controllable
+event pending further observation---a concept formalized in the DES literature
+as \emph{conditional enabling}~\cite{ramadge87}.  Corollary~\ref{cor:escalate}
+is the governance-system analogue of the requirement that supervisory
+decisions be enforced at the moment of event firing.
+
+\paragraph{Access Control.}
+The access matrix model of Harrison, Ruzzo, and Ullman~\cite{hru76} is the
+classical foundation of access control theory.  RBAC~\cite{sandhu96} and
+attribute-based access control (ABAC) elaborate on it.  These models define
+what operations principals are permitted to perform; they do not model the
+temporal relationship between the permission check and the operation
+execution.  Our work complements access control theory by characterizing when
+that temporal relationship matters for correctness.
+
+\paragraph{Reference Monitors.}
+Anderson~\cite{anderson72} defined the reference monitor as a component that
+must be invoked on every access, must be tamper-proof, and must be small
+enough to be verified.  Our atomic decision boundary captures the first and
+third properties at a formal level: the boundary is invoked at the moment of
+transition (complete mediation) and its definition is minimal (a single
+function $F$).  The ACP protocol~\cite{acp26} is explicitly designed as a
+decentralized reference monitor; the present paper provides the formal basis
+for why complete mediation requires atomicity.
+
+\paragraph{Policy Engines.}
+OPA~\cite{opa} and Cedar~\cite{cedar} provide expressive policy languages for
+evaluating authorization decisions.  These systems are powerful within their
+class (split evaluation) and our taxonomy does not imply that they are
+deficient---only that they cannot provide execution-time admissibility
+guarantees by construction.  Hybrid architectures in which a policy engine
+provides the decision function $D$ inside an atomic enforcement layer are
+consistent with our model; the atomicity requirement falls on the enclosing
+layer, not on the policy engine itself.
+
+\paragraph{Temporal Logic and Model Checking.}
+Safety properties in temporal logic (e.g., $\square \neg \mathrm{bad}$) can
+express admissibility requirements.  Model checkers verify whether a system
+satisfies such properties.  Our contribution is complementary: we identify
+which \emph{system architectures} can satisfy admissibility properties
+universally (atomic) and which cannot (split), independent of any particular
+property specification.
+
+% ============================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% ============================================================
+
+We have introduced the \emph{atomic decision boundary} as a structural
+requirement for governance systems that must enforce admissibility at execution
+time.  Using a formal LTS model, we proved that split evaluation systems
+cannot provide this guarantee under all execution traces, and showed that
+no enrichment of the split architecture---whether through additional policies,
+external state, or re-evaluation---can close the structural gap without
+introducing atomicity.
+
+The $\Escalate$ outcome extends classical binary decision models and captures
+supervisor-mediated governance.  We proved that escalation transfers, rather
+than removes, the atomicity obligation: any system that resolves an
+$\Escalate$ must itself be atomic at the point of resolution.
+
+The core result is direct: \emph{admissibility is not a property of
+evaluation---it is a property of execution.}  Under
+Assumption~\ref{asm:nontrivial}, no system that separates evaluation from
+execution can guarantee admissibility at execution time; only a system that
+couples them as a single indivisible step at the decision boundary can provide
+this guarantee.
+
+This characterization serves as the formal foundation for the subsequent papers
+in this series of four.  The Agent Control Protocol~(ACP)~\cite{acp26}
+(Paper~1) instantiates the atomic decision boundary for multi-agent environments.
+The Invariant Measurement Layer~\cite{iml26} (Paper~2) operates above the
+atomic enforcement layer to detect behavioral drift that remains invisible to
+enforcement signals.  Paper~3 extends this framework to the fair allocation of
+governance decisions across competing agents.  All three rest on the structural
+guarantee established here: that the boundary they operate relative to is, in
+fact, atomic.
+
+% ============================================================
+% Bibliography
+% ============================================================
+\begin{thebibliography}{99}
+
+\bibitem{anderson72}
+J.~P.~Anderson.
+\newblock Computer security technology planning study.
+\newblock Technical Report ESD-TR-73-51, USAF Electronic Systems Division,
+  1972.
+
+\bibitem{bishop96}
+M.~Bishop and D.~Bailey.
+\newblock A critical analysis of vulnerability taxonomies.
+\newblock Technical Report CSE-96-11, University of California at Davis,
+  1996.
+
+\bibitem{cedar}
+J.~Cutler et~al.
+\newblock {Cedar}: A new policy language.
+\newblock \emph{USENIX Security Symposium}, 2023.
+
+\bibitem{herlihy90}
+M.~P.~Herlihy and J.~M.~Wing.
+\newblock Linearizability: A correctness condition for concurrent objects.
+\newblock \emph{ACM Transactions on Programming Languages and Systems},
+  12(3):463--492, 1990.
+
+\bibitem{hru76}
+M.~A.~Harrison, W.~L.~Ruzzo, and J.~D.~Ullman.
+\newblock Protection in operating systems.
+\newblock \emph{Communications of the ACM}, 19(8):461--471, 1976.
+
+\bibitem{acp26}
+M.~Fernandez.
+\newblock Agent control protocol: Admission control for agent actions.
+\newblock arXiv:2603.18829 [cs.CR], DOI:10.5281/zenodo.19561638, 2026.
+
+\bibitem{iml26}
+M.~Fernandez.
+\newblock From admission to invariants: Measuring deviation in delegated agent
+  systems.
+\newblock \emph{Manuscript in preparation}, 2026.
+
+\bibitem{opa}
+Open Policy Agent.
+\newblock \url{https://www.openpolicyagent.org}.
+\newblock Accessed April 2026.
+
+\bibitem{ramadge87}
+P.~J.~Ramadge and W.~M.~Wonham.
+\newblock Supervisory control of a class of discrete event processes.
+\newblock \emph{SIAM Journal on Control and Optimization}, 25(1):206--230,
+  1987.
+
+\bibitem{sandhu96}
+R.~S.~Sandhu, E.~J.~Coyne, H.~L.~Feinstein, and C.~E.~Youman.
+\newblock Role-based access control models.
+\newblock \emph{IEEE Computer}, 29(2):38--47, 1996.
+
+\bibitem{tsafrir08}
+D.~Tsafrir, T.~Hertz, D.~Wagner, and D.~Da~Silva.
+\newblock Portably solving file {TOCTTOU} races with hardness amplification.
+\newblock In \emph{USENIX Conference on File and Storage Technologies
+  (FAST)}, 2008.
+
+\end{thebibliography}
+
+\end{document}

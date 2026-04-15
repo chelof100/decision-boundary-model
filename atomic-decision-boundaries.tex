@@ -7,6 +7,7 @@
 \usepackage{xcolor}
 \usepackage{enumitem}
 \usepackage{microtype}
+\usepackage[numbers,sort&compress]{natbib}
 
 % ---------- Theorem environments ----------
 \theoremstyle{plain}
@@ -949,81 +950,7 @@ fact, atomic.
 % ============================================================
 % Bibliography
 % ============================================================
-\begin{thebibliography}{99}
-
-\bibitem{anderson72}
-J.~P.~Anderson.
-\newblock Computer security technology planning study.
-\newblock Technical Report ESD-TR-73-51, USAF Electronic Systems Division,
-  1972.
-
-\bibitem{bishop96}
-M.~Bishop and D.~Bailey.
-\newblock A critical analysis of vulnerability taxonomies.
-\newblock Technical Report CSE-96-11, University of California at Davis,
-  1996.
-
-\bibitem{cedar}
-J.~Cutler et~al.
-\newblock {Cedar}: A new policy language.
-\newblock \emph{USENIX Security Symposium}, 2023.
-
-\bibitem{ligatti05}
-J.~Ligatti, L.~Bauer, and D.~Walker.
-\newblock Edit automata: Enforcement mechanisms for run-time security policies.
-\newblock \emph{International Journal of Information Security},
-  4(1--2):2--16, 2005.
-
-\bibitem{schneider00}
-F.~B.~Schneider.
-\newblock Enforceable security policies.
-\newblock \emph{ACM Transactions on Information and System Security},
-  3(1):30--50, 2000.
-
-\bibitem{herlihy90}
-M.~P.~Herlihy and J.~M.~Wing.
-\newblock Linearizability: A correctness condition for concurrent objects.
-\newblock \emph{ACM Transactions on Programming Languages and Systems},
-  12(3):463--492, 1990.
-
-\bibitem{hru76}
-M.~A.~Harrison, W.~L.~Ruzzo, and J.~D.~Ullman.
-\newblock Protection in operating systems.
-\newblock \emph{Communications of the ACM}, 19(8):461--471, 1976.
-
-\bibitem{acp26}
-M.~Fernandez.
-\newblock Agent control protocol: Admission control for agent actions.
-\newblock arXiv:2603.18829 [cs.CR], DOI:10.5281/zenodo.19561638, 2026.
-
-\bibitem{iml26}
-M.~Fernandez.
-\newblock From admission to invariants: Measuring deviation in delegated agent
-  systems.
-\newblock \emph{Manuscript in preparation}, 2026.
-
-\bibitem{opa}
-Open Policy Agent.
-\newblock \url{https://www.openpolicyagent.org}.
-\newblock Accessed April 2026.
-
-\bibitem{ramadge87}
-P.~J.~Ramadge and W.~M.~Wonham.
-\newblock Supervisory control of a class of discrete event processes.
-\newblock \emph{SIAM Journal on Control and Optimization}, 25(1):206--230,
-  1987.
-
-\bibitem{sandhu96}
-R.~S.~Sandhu, E.~J.~Coyne, H.~L.~Feinstein, and C.~E.~Youman.
-\newblock Role-based access control models.
-\newblock \emph{IEEE Computer}, 29(2):38--47, 1996.
-
-\bibitem{tsafrir08}
-D.~Tsafrir, T.~Hertz, D.~Wagner, and D.~Da~Silva.
-\newblock Portably solving file {TOCTTOU} races with hardness amplification.
-\newblock In \emph{USENIX Conference on File and Storage Technologies
-  (FAST)}, 2008.
-
-\end{thebibliography}
+\bibliographystyle{plainnat}
+\bibliography{references}
 
 \end{document}

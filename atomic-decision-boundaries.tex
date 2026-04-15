@@ -239,6 +239,36 @@ systems, API quota registries, agent delegation ledgers, and shared databases---
 satisfies both conditions: actions can be admitted and state can be modified
 by concurrent environment processes between evaluation and execution.
 
+\begin{assumption}[Environment Model]
+\label{asm:env}
+The environment satisfies the following:
+\begin{enumerate}[label=(\roman*)]
+  \item \emph{Uncontrollability.}  Environment actions $e \in A_{\mathrm{env}}$
+    are not subject to governance control: the admission system cannot prevent,
+    delay, or reorder them.
+
+  \item \emph{Arbitrary interleaving.}  In a split evaluation system, environment
+    actions may fire at any point in the LTS between the decision transition
+    $\mathit{dec}(a)$ and the execution transition $\mathit{exec}(a)$.  The
+    system provides no synchronization barrier that would prevent such
+    interleaving.
+
+  \item \emph{State visibility.}  The decision function $D$ observes the system
+    state at the time it is invoked.  It does not have predictive access to
+    future states produced by environment actions that have not yet fired.
+\end{enumerate}
+\end{assumption}
+
+Assumption~\ref{asm:env}(i) reflects the standard distinction between
+controllable and uncontrollable events in supervisory control
+theory~\cite{ramadge87}.  Assumption~\ref{asm:env}(ii) is the adversarial model
+under which the theorem is stated: the environment is assumed capable of
+interleaving at the worst moment.  Assumption~\ref{asm:env}(iii) is satisfied
+by every decision function that operates on observable state; a function
+with oracular access to future states would not correspond to any implementable
+system.  The three assumptions hold collectively in all multi-agent systems
+where agents share mutable state with concurrent external processes.
+
 \begin{example}[Running Example]
 \label{ex:running}
 An agent manages file operations on a shared resource.  The state $s$ encodes
@@ -461,7 +491,7 @@ Let $M_{\mathrm{split}}$ be any split evaluation system and let
 $M_{\mathrm{atom}}$ be any atomic decision boundary system, both defined
 over the same state space $S$, action set $A$, environment actions
 $A_{\mathrm{env}}$, admissibility predicate $\Adm$, and transition function
-$T$.  Under Assumption~\ref{asm:nontrivial}, there exists an execution trace
+$T$.  Under Assumptions~\ref{asm:nontrivial} and~\ref{asm:env}, there exists an execution trace
 $\sigma^* \in \Traces(M_{\mathrm{split}})$ such that:
 \begin{enumerate}[label=(\roman*)]
   \item $\sigma^*$ contains a transition $s^* \xrightarrow{\mathit{exec}(a)}
@@ -526,13 +556,16 @@ where admissibility fails.  This establishes~(ii).
 
 \paragraph{Conclusion.}
 $M_{\mathrm{split}}$ produces an inadmissible transition under $\sigma^*$;
-$M_{\mathrm{atom}}$ does not.  No construction can equate the two systems
-with respect to admissibility preservation under all traces, because any
-construction that closes the gap for $\sigma^*$ must either (a) prevent
-environment actions from interleaving between $\mathit{dec}(a)$ and
-$\mathit{exec}(a)$---which is precisely the atomic boundary condition---or
-(b) re-evaluate $D$ at execution time atomically with $T$---which is again
-the atomic boundary condition.
+$M_{\mathrm{atom}}$ does not.  Therefore $M_{\mathrm{split}}$ does not satisfy
+Definition~\ref{def:admpres} (admissibility preservation) under all execution
+traces.  No construction applied to $M_{\mathrm{split}}$ can restore
+admissibility preservation without introducing an atomic boundary: any
+mechanism that prevents the violation in $\sigma^*$ must either
+(a) block environment actions from interleaving between $\mathit{dec}(a)$ and
+$\mathit{exec}(a)$---which is precisely Definition~\ref{def:atomic}---or
+(b) re-evaluate $D$ at execution time jointly with $T$ as a single
+indivisible step---which is again Definition~\ref{def:atomic}.  In both cases,
+the fix is the atomic boundary condition itself.
 \end{proof}
 
 \subsection{Corollaries}
@@ -837,6 +870,29 @@ function $F$).  The ACP protocol~\cite{acp26} is explicitly designed as a
 decentralized reference monitor; the present paper provides the formal basis
 for why complete mediation requires atomicity.
 
+\paragraph{Runtime Enforcement and Security Automata.}
+Schneider~\cite{schneider00} characterized which security properties are
+enforceable by inline reference monitors modeled as security automata: a
+property is enforceable if and only if its violations are detectable in finite
+traces (i.e., it is a safety property).  The admissibility preservation
+requirement of Definition~\ref{def:admpres} is a safety property in precisely
+this sense---each violation is witnessed by the finite trace $\sigma^*$.
+Schneider's framework assumes the monitor can observe and halt executions; our
+work identifies the structural condition under which that halt can be guaranteed
+\emph{atomically with respect to the state transition being governed}.  A
+monitor that halts asynchronously with the transition is still a split system
+in our model.
+
+Ligatti, Bauer, and Walker~\cite{ligatti05} extended security automata to
+\emph{edit automata}, which can suppress or insert events to enforce a broader
+class of policies.  The $\Escalate$ outcome in our model corresponds
+structurally to suppression: the transition is prevented pending external
+resolution.  The Escalation Closure Requirement (Corollary~\ref{cor:escalate})
+is the governance-layer analogue of the requirement that edit operations
+themselves be applied consistently with the current state of the running
+system---a condition edit automata assume implicitly but do not formalize at
+the level of decision boundaries.
+
 \paragraph{Policy Engines.}
 OPA~\cite{opa} and Cedar~\cite{cedar} provide expressive policy languages for
 evaluating authorization decisions.  These systems are powerful within their
@@ -911,6 +967,18 @@ M.~Bishop and D.~Bailey.
 J.~Cutler et~al.
 \newblock {Cedar}: A new policy language.
 \newblock \emph{USENIX Security Symposium}, 2023.
+
+\bibitem{ligatti05}
+J.~Ligatti, L.~Bauer, and D.~Walker.
+\newblock Edit automata: Enforcement mechanisms for run-time security policies.
+\newblock \emph{International Journal of Information Security},
+  4(1--2):2--16, 2005.
+
+\bibitem{schneider00}
+F.~B.~Schneider.
+\newblock Enforceable security policies.
+\newblock \emph{ACM Transactions on Information and System Security},
+  3(1):30--50, 2000.
 
 \bibitem{herlihy90}
 M.~P.~Herlihy and J.~M.~Wing.

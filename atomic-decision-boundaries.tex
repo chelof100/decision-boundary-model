@@ -6,7 +6,8 @@
 \usepackage{booktabs}
 \usepackage{xcolor}
 \usepackage{enumitem}
-\usepackage{microtype}
+\usepackage[protrusion=true,expansion=false]{microtype}
+\setlength{\emergencystretch}{6em}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, fit, backgrounds, patterns, decorations.pathreplacing}
@@ -135,13 +136,13 @@ time under all execution traces.  The impossibility is constructive: we exhibit
 a concrete execution trace that witnesses the gap.
 
 A distinguishing feature of our model is the three-valued decision domain
-$\Dset = \{\Allow, \Refuse, \Escalate\}$.  The $\Escalate$ outcome, absent
-from classical TOCTOU analyses~\cite{bishop96, tsafrir08}, corresponds to
-suspension of the transition pending supervisor review---a first-class governance
-action in modern agent systems~\cite{acp26}.  We show that $\Escalate$ does
-not eliminate the atomicity requirement; it \emph{transfers} it to the
-resolution step, and prove that the same structural gap arises there unless
-resolution is itself atomic.
+$\Dset = \{\Allow, \Refuse, \Escalate\}$.
+The $\Escalate$ outcome---absent from classical TOCTOU analyses
+\cite{bishop96, tsafrir08}---suspends the transition pending supervisor review,
+a first-class governance action in modern agent systems \cite{acp26}.
+We show that $\Escalate$ does not eliminate the atomicity requirement; it
+\emph{transfers} it to the resolution step, and prove that the same
+structural gap arises there unless resolution is itself atomic.
 
 \paragraph{Contributions.}
 \begin{enumerate}[label=\normalfont(\roman*)]
@@ -176,9 +177,8 @@ This paper is Paper~0 in a series of four.  The Agent Control Protocol~(ACP)~\ci
 (Paper~1) instantiates the atomic decision boundary for multi-agent governance.
 The Invariant Measurement Layer~(IML)~\cite{iml26} (Paper~2) operates above the
 atomic enforcement layer and addresses behavioral drift that remains invisible
-to enforcement-based monitoring.  Paper~3 (in preparation) addresses the fair
-allocation of atomic governance decisions across agents operating under shared
-resource constraints.
+to enforcement-based monitoring.  Paper~3~\cite{fairgov26} addresses the fair allocation of atomic governance
+decisions across agents operating under shared resource constraints.
 
 % ============================================================
 \section{System Model}
@@ -263,7 +263,9 @@ which the theorem applies.
 \label{asm:nontrivial}
 The system satisfies the following:
 \begin{enumerate}[label=(\roman*)]
-  \item There exist $s \in S$ and $a \in A$ with $\Adm(s, a) = \mathsf{true}$.
+  \item There exist $s \in S$ and $a \in A$ with $\Adm(s, a) = \mathsf{true}$
+    and $D(s, a) = \Allow$ (the decision function grants at least one
+    admissible action without escalation).
   \item There exist $s \in S$, $a \in A$, and $e \in A_{\mathrm{env}}$ such that
     $s \xrightarrow{e} s^*$ and $\Adm(s^*, a) = \mathsf{false}$.
 \end{enumerate}
@@ -337,9 +339,19 @@ Let $\Dset = \{\Allow, \Refuse, \Escalate\}$.  We call elements of $\Dset$
 A \emph{decision function} is a mapping
 $D : S \times A \to \Dset$
 that assigns a disposition to each (state, action) pair.  We say $D$ is
-\emph{consistent with} $\Adm$ if:
-$D(s, a) = \Allow \Rightarrow \Adm(s, a)$ and
-$D(s, a) = \Refuse \Rightarrow \neg\Adm(s, a)$.
+\emph{consistent with} $\Adm$ if the following hold for all $(s,a) \in S \times A$:
+\begin{enumerate}[label=(\roman*)]
+  \item $D(s, a) = \Allow \Rightarrow \Adm(s, a)$;
+  \item $D(s, a) = \Refuse \Rightarrow \neg\Adm(s, a)$;
+  \item $\Adm(s, a) \Rightarrow D(s, a) \neq \Refuse$
+        \quad (admissible states are never refused without escalation);
+  \item $\neg\Adm(s, a) \Rightarrow D(s, a) \neq \Allow$
+        \quad (inadmissible states are never allowed).
+\end{enumerate}
+Conditions (i)--(iv) together imply:
+$D(s,a) = \Allow \Leftrightarrow \Adm(s,a)$ whenever $D(s,a) \neq \Escalate$.
+The $\Escalate$ disposition is reserved for cases where admissibility is
+indeterminate and requires external resolution.
 \end{definition}
 
 \begin{definition}[Transition Function]
@@ -362,6 +374,7 @@ mathematical object.  The contribution of the Atomic Decision Boundary
 \emph{single arc} in the LTS, exposing no intermediate state to environment
 actions.  In a split system, the same pair $(d, s')$ is eventually produced,
 but the path from $s$ to $s'$ passes through the intermediate state $s_D$
+(introduced formally in Definition~\ref{def:split} below, \S\ref{sec:split})
 where environment actions can interleave.  The structural difference between
 the two classes is in the topology of the LTS---specifically, whether there
 exists an intermediate state---not in the domain or codomain of the function.
@@ -379,14 +392,21 @@ function
 \]
 such that for every $(s, a) \in S \times A$:
 \begin{align}
-  F(s, a) &= (d,\, s') \label{eq:atomic-pair}\\
+  F(s, a) &= (d,\, \hat{s}') \label{eq:atomic-pair}\\
   d &= D(s, a) \label{eq:atomic-decision}\\
-  s' &= T(s, a) \quad \text{if } d = \Allow \label{eq:atomic-transition}\\
-  s' &= s \quad \text{if } d = \Refuse \label{eq:atomic-refuse}
+  \hat{s}' &= (T(s, a),\, P) \quad \text{if } d = \Allow \label{eq:atomic-transition}\\
+  \hat{s}' &= (s,\, P) \quad \text{if } d = \Refuse \label{eq:atomic-refuse}\\
+  \hat{s}' &= (s,\, P \cup \{(s,a)\}) \quad \text{if } d = \Escalate
+              \label{eq:atomic-escalate}
 \end{align}
-and the computation of $d$ and $s'$ corresponds to a \emph{single indivisible
-transition} in the LTS: $s \xrightarrow{F(s,a)} s'$ with no intermediate
-state between the evaluation of $d$ and the determination of $s'$.
+where $\hat{s}' \in \hat{S} = S \times \Req$ is the post-transition state
+in the escalation-extended state space (defined formally in
+Definition~\ref{def:escstate}, \S\ref{sec:escalate}).  For
+$d \in \{\Allow, \Refuse\}$, the pending-request component $P$ is unchanged
+by the transition; the state reduces to $S$ in those cases.
+The computation of $d$ and $\hat{s}'$ corresponds to a \emph{single indivisible
+transition} in the LTS: $s \xrightarrow{F(s,a)} \hat{s}'$ with no intermediate
+state between the evaluation of $d$ and the determination of $\hat{s}'$.
 \end{definition}
 
 The indivisibility condition in Definition~\ref{def:atomic} is a model-level
@@ -462,7 +482,9 @@ leaving the system state unchanged.  No transition of $T$ fires.
 \begin{definition}[Supervisor Resolution Function]
 \label{def:resolve}
 The \emph{resolution function} $\mathrm{resolve} : \hat{S} \times (S \times A)
-\times \{{\Allow, \Refuse}\} \to \hat{S}$ is defined by:
+\times \{{\Allow, \Refuse}\} \to \hat{S}$ is defined, for
+$(s_{\mathrm{orig}}, a) \in P$ (precondition: the request being resolved must
+be in the pending set), by:
 \begin{align}
   \mathrm{resolve}\bigl((s_t, P),\; (s_{\mathrm{orig}}, a),\; \Allow\bigr)
     &= \bigl(T(s_t, a),\; P \setminus \{(s_{\mathrm{orig}}, a)\}\bigr)
@@ -472,7 +494,9 @@ The \emph{resolution function} $\mathrm{resolve} : \hat{S} \times (S \times A)
     \label{eq:res-refuse}
 \end{align}
 where $s_t$ is the \emph{current} system state at resolution time, which may
-differ from $s_{\mathrm{orig}}$.
+differ from $s_{\mathrm{orig}}$.  The function is undefined when
+$(s_{\mathrm{orig}}, a) \notin P$; resolution of a request not in the pending
+set is a protocol error.
 \end{definition}
 
 Two observations are immediate.  First, when $\Allow$ is issued at resolution,
@@ -503,6 +527,7 @@ transferred.
 % ============================================================
 \begin{figure}[t]
 \centering
+\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
   node distance = 1.0cm and 1.5cm,
   box/.style    = {draw, rounded corners=3pt, minimum width=2.0cm,
@@ -560,14 +585,15 @@ transferred.
 \node[font=\scriptsize, gray, right=0.05cm of noenv] {blocked};
 \end{scope}
 
-\end{tikzpicture}
-\caption{Architectural contrast between a split evaluation system (left) and an
-atomic decision system (right).  In the split system, environment actions
-$e \in A_{\mathrm{env}}$ can interleave between the policy evaluation and the
-state transition, producing the exploitable gap $\Delta t > 0$ that
-Theorem~\ref{thm:main} makes precise.  In the atomic system, $F$ determines
-the decision and the resulting state as a \emph{single indivisible LTS step};
-no environment action can interleave within that step.}
+\end{tikzpicture}}% end \resizebox
+\caption{\raggedright Architectural contrast between a split evaluation
+system (left) and an atomic decision system (right).  In the split
+system, environment actions $e\!\in\!A_{\mathrm{env}}$ may interleave
+between the policy evaluation and the state transition, producing the
+exploitable gap $\Delta t > 0$ proved in Theorem~\ref{thm:main}.
+In the atomic system, $F$ determines both the decision and the resulting
+state as a single indivisible LTS step; no environment action can
+interleave within it.}
 \label{fig:architecture}
 \end{figure}
 
@@ -668,9 +694,8 @@ Consider the following trace in $M_{\mathrm{split}}$:
     \;\xrightarrow{\mathit{exec}(a)}\; T(s^*, a).
 \]
 \begin{enumerate}
-  \item The decision transition $\mathit{dec}(a)$ fires in state $s$.  Since
-    $\Adm(s, a) = \mathsf{true}$ and $D$ is consistent with $\Adm$
-    (Definition~\ref{def:decfun}), we have $D(s, a) = \Allow$.  The system
+  \item The decision transition $\mathit{dec}(a)$ fires in state $s$.  By
+    Assumption~\ref{asm:nontrivial}(i), $D(s, a) = \Allow$.  The system
     records $\Allow$ and transitions to $s_D$ (encoding the recorded decision
     alongside the current state; the underlying system state is still $s$).
 
@@ -698,8 +723,11 @@ atomically; $e$ cannot interleave \emph{within} the single LTS step.  The
 resulting state is $T(s, a)$, produced from $s$ where $\Adm(s, a)$ holds.
 
 If the agent acts \emph{after} $e$ fires (system in state $s^*$):
-$F(s^*, a) = (\Refuse, s^*)$, since $\Adm(s^*, a) = \mathsf{false}$ and $D$
-is consistent with $\Adm$.  No transition of $T$ fires.
+$D(s^*, a) \in \{\Refuse, \Escalate\}$, since $\Adm(s^*, a) = \mathsf{false}$
+and $D$ is consistent with $\Adm$ (condition~(iv): $\neg\Adm \Rightarrow D \neq \Allow$).
+In either case, no transition of $T$ fires: $\Refuse$ keeps the state unchanged,
+and $\Escalate$ records the pending request without firing $T$
+(Definition~\ref{def:esctrans}).
 
 In neither case does $M_{\mathrm{atom}}$ commit $T(\cdot, a)$ in a state
 where admissibility fails.  This establishes~(ii).
@@ -811,12 +839,27 @@ Let the system issue $\Escalate$ for action $a$ in state $s$, recording the
 pending request $(s, a)$ per Definition~\ref{def:esctrans}.
 
 \emph{(Necessity.)}  Suppose $\mathrm{resolve}$ is split: the supervisor
-evaluates $D(s_t, a)$ in state $s_t$, and then fires $T$ separately.  By
-Theorem~\ref{thm:main} applied to the resolution sub-process (with
-$s_t$ as the initial evaluation state and a potential environment action $e'$
-before $T$ fires), there exists a trace in which the supervisor's $\Allow$
-is computed in $s_t$ but $T$ fires in $s^{**}$ with $\Adm(s^{**}, a) =
-\mathsf{false}$.  Thus, $\mathrm{resolve}$ admits an inadmissible transition.
+evaluates $D(s_t, a)$ in state $s_t$, and then fires $T$ separately.
+
+We verify that Assumptions~\ref{asm:nontrivial} and~\ref{asm:env} hold for
+the resolution sub-process operating on $\hat{S} = S \times \Req$.
+Assumption~\ref{asm:nontrivial}(i) holds because $(s_t, a)$ has
+$\Adm(s_t, a) = \mathsf{true}$ (otherwise the supervisor would not issue
+$\Allow$) and $D(s_t, a) = \Allow$ (this is the split supervisor's decision).
+Assumption~\ref{asm:nontrivial}(ii) holds because the system state $s_t$
+(the first component of $\hat{S}$) can be modified by environment actions
+between the supervisor's decision transition and the execution of $T$;
+the same Assumption~\ref{asm:env} that applies to the primary system applies
+to the projected $S$-component of $\hat{S}$.
+Assumption~\ref{asm:env}(i)--(iii) carry over verbatim to the projected
+$S$-component: environment actions are uncontrollable, may interleave
+between the supervisor's evaluation and the firing of $T$, and the
+supervisor observes only the current state $s_t$ at the time of evaluation.
+
+By Theorem~\ref{thm:main} applied to this resolution sub-process, there
+exists a trace in which the supervisor's $\Allow$ is computed in $s_t$ but
+$T$ fires in $s^{**}$ with $\Adm(s^{**}, a) = \mathsf{false}$.
+Thus, $\mathrm{resolve}$ admits an inadmissible transition.
 
 \emph{(Sufficiency.)}  Suppose $\mathrm{resolve}$ is atomic: the evaluation
 $D(s_t, a)$ and the application $T(s_t, a)$ are a single indivisible step in
@@ -844,29 +887,40 @@ structural and does not reflect comparisons of expressiveness or performance.
 \centering
 \caption{Structural classification of existing governance mechanisms.}
 \label{tab:mapping}
-\begin{tabular}{lll}
+\begin{tabular}{llp{6.8cm}}
 \toprule
 \textbf{System} & \textbf{Class} & \textbf{Basis for classification} \\
 \midrule
-RBAC~\cite{sandhu96}   & Split           & Permission check and execution are distinct
-                                           operations \\
-ABAC~\cite{hru76}      & Split           & Attribute evaluation external to transition;
-                                           attributes may change \\
-OPA~\cite{opa}         & Split           & Policy evaluation external to state
-                                           transition \\
-Cedar~\cite{cedar}     & Split           & Authorization decision external to the
-                                           enforcing runtime \\
-OPA + Redis            & Split           & External state enriches $D$; structural gap
-                                           remains (Cor.~\ref{cor:extstate}) \\
-AWS IAM                & Split           & IAM evaluation precedes API call execution;
-                                           no shared-snapshot guarantee \\
-Kubernetes Admission   & Partially atomic & Webhook admits before object creation, but
-                                           cross-resource state (e.g., a
-                                           \texttt{ResourceQuota} modified
-                                           concurrently) is not jointly atomic with
-                                           the admission decision \\
-ACP~\cite{acp26}       & Atomic          & Decision and state mutation jointly enforced
-                                           via single-use Execution Token \\
+RBAC~\cite{sandhu96}
+  & Split
+  & Permission check and execution are distinct operations \\[2pt]
+ABAC~\cite{hru76}
+  & Split
+  & Attribute evaluation external to transition; attributes may change \\[2pt]
+OPA~\cite{opa}
+  & Split
+  & Policy evaluation external to state transition \\[2pt]
+Cedar~\cite{cedar}
+  & Split
+  & Authorization decision external to the enforcing runtime \\[2pt]
+OPA + Redis
+  & Split
+  & External state enriches $D$; structural gap remains
+    (Cor.~\ref{cor:extstate}) \\[2pt]
+AWS IAM
+  & Split
+  & IAM evaluation precedes API call execution; no shared-snapshot
+    guarantee \\[2pt]
+Kubernetes Admission
+  & Partially atomic
+  & Webhook admits before object creation, but cross-resource state
+    (e.g., a \texttt{ResourceQuota} modified concurrently) is not
+    jointly atomic with the admission decision
+    (Remark~\ref{rem:partial-atomic}) \\[2pt]
+ACP~\cite{acp26}
+  & Atomic
+  & Decision and state mutation jointly enforced via single-use
+    Execution Token \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -935,6 +989,57 @@ Formally:
 \]
 where $d$ and $s'$ are determined by a single evaluate-then-mutate execution
 contract~\cite{acp26}.  ACP is an atomic decision boundary system.
+
+\paragraph{AWS IAM.}
+AWS IAM evaluates authorization requests against a set of policies attached
+to principals, resources, and conditions.  An IAM authorization call
+(e.g., to the IAM policy simulator or to the underlying STS service)
+produces a decision of $\Allow$ or $\Refuse$.  The resulting API call is
+executed by the service (e.g., S3, EC2) independently of the IAM evaluation
+context.  No shared-snapshot guarantee exists between the IAM policy
+evaluation context and the service's execution context: condition keys
+(e.g., \texttt{aws:CurrentTime}, \texttt{ec2:ResourceTag}) are evaluated
+at IAM call time, while the resource state at execution time may differ.
+
+\emph{Concrete trace.}  An agent requests an S3 write.  IAM evaluates the
+policy in state $s$ where the bucket's ACL permits writes from the agent's
+role, returning $d = \Allow$.  Before the write reaches S3, a concurrent
+process changes the bucket policy (environment action $e$), producing $s^*$
+where the write is inadmissible.  The S3 service executes $T(s^*, \mathit{write})$
+regardless, since it received the IAM authorization token produced in $s$.
+This is the trace $\sigma^*$ of Theorem~\ref{thm:main}.  AWS IAM is a split
+evaluation system.
+
+\paragraph{Cedar.}
+Cedar is a policy language and evaluation engine designed for authorization
+decisions in service-oriented architectures~\cite{cedar}.  Like OPA, Cedar
+evaluates policies against entities (principal, action, resource, context)
+and returns a decision.  The enforcement of that decision---the actual
+execution of the requested operation---occurs outside Cedar, in the calling
+application or service.  Cedar provides no mechanism to jointly enforce
+its authorization decision with the subsequent state transition; the two
+remain separate LTS transitions.  By Corollary~\ref{cor:extstate},
+augmenting Cedar with an entity store does not restore atomicity: the
+entity store is read at evaluation time, and the application may mutate
+relevant entity attributes between Cedar's decision and the action's execution.
+Cedar is a split evaluation system.
+
+\begin{remark}[Partially atomic systems]
+\label{rem:partial-atomic}
+Table~\ref{tab:mapping} uses the term \emph{partially atomic} for
+Kubernetes admission webhooks.  This denotes a system that satisfies
+the atomic decision boundary condition (Definition~\ref{def:atomic}) for
+a restricted subset of state---specifically, single-object lifecycle
+operations---but fails atomicity when the relevant admissibility predicate
+$\Adm$ depends on shared or cross-resource state that is not included in
+the joint evaluation-and-execution snapshot.  Formally: let $S$ decompose
+as $S = S_{\mathrm{local}} \times S_{\mathrm{global}}$.  If the system is
+atomic with respect to $S_{\mathrm{local}}$ but split with respect to
+$S_{\mathrm{global}}$, it is partially atomic.  When $\Adm$ depends only
+on $S_{\mathrm{local}}$, the system provides full guarantees; when $\Adm$
+depends on $S_{\mathrm{global}}$, Theorem~\ref{thm:main} applies to the
+$S_{\mathrm{global}}$ component.
+\end{remark}
 
 \paragraph{Kubernetes Admission (Partially Atomic).}
 Kubernetes admission webhooks intercept API server requests before the object
@@ -1169,9 +1274,8 @@ evaluated is precisely the state against which the transition commits.  The
 Invariant Measurement Layer~\cite{iml26} (Paper~2) operates \emph{above} the
 atomic enforcement layer---taking atomicity as given---and detects behavioral
 drift that accumulates across sequences of individually admissible actions,
-remaining invisible to per-action enforcement signals.  Paper~3 extends the
-framework to the fair allocation of governance decisions across agents
-competing under shared resource constraints.  All three rest on the structural
+remaining invisible to per-action enforcement signals.  Paper~3~\cite{fairgov26} extends the framework to the fair allocation of
+governance decisions across agents competing under shared resource constraints.  All three rest on the structural
 guarantee established here: that the boundary they operate relative to is, in
 fact, atomic.
 

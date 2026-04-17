@@ -1305,9 +1305,24 @@ Invariant Measurement Layer~\cite{iml26} (Paper~2) operates \emph{above} the
 atomic enforcement layer---taking atomicity as given---and detects behavioral
 drift that accumulates across sequences of individually admissible actions,
 remaining invisible to per-action enforcement signals.  Paper~3~\cite{fairgov26} extends the framework to the fair allocation of
-governance decisions across agents competing under shared resource constraints.  All three rest on the structural
-guarantee established here: that the boundary they operate relative to is, in
-fact, atomic.
+governance decisions across competing agents, proving that correct enforcement
+does not imply fair allocation and characterising the allocation layer
+explicitly.  Paper~4~\cite{fernandez2026comp} closes the series by proving
+that the four layers are \emph{irreducible}: no strict subset can replicate the
+governance guarantees of the full stack, and the composition itself produces
+emergent properties absent from any single layer.
+
+\medskip
+\noindent\textit{Note on terminology.}\enspace
+Throughout this paper the non-admissible outcome is written $\Refuse$.
+Subsequent papers in the series (Papers~3--4) adopt the synonym
+$\texttt{Deny}$, following ACP's \texttt{DENIED} protocol response
+(Paper~1).  The decision domain
+$\mathcal{D} = \{\Allow, \Escalate, \Refuse\}$ is the same object across the
+series.
+
+All four papers rest on the structural guarantee established here: that the
+boundary they operate relative to is, in fact, atomic.
 
 % ============================================================
 % Bibliography

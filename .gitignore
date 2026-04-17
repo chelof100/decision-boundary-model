@@ -26,3 +26,6 @@ Atomic Decision Boundaries paper 0.md
 Decision Boundary Model.md
 Decision Boundary Model brief and outline.md
 *.pdf
+
+# Claude Code local config
+.claude/

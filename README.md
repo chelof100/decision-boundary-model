@@ -87,15 +87,17 @@ where `Adm(s, a) = true` but `Adm(s*, a) = false` after environment action `e`.
 | Paper | Title | Status |
 |---|---|---|
 | **Paper 0** | Atomic Decision Boundaries (this repo) | In preparation |
-| **Paper 1** | [Agent Control Protocol (ACP)](https://arxiv.org/abs/2603.18829) | Published |
-| **Paper 2** | [From Admission to Invariants (IML)](https://github.com/chelof100/iml-benchmark) | In preparation |
-| **Paper 3** | Fairness under Atomic Governance | Future work |
+| **Paper 1** | Agent Control Protocol (ACP) | [acp-framework-en](https://github.com/chelof100/acp-framework-en) | [Published — arXiv:2603.18829](https://arxiv.org/abs/2603.18829) |
+| **Paper 2** | From Admission to Invariants (IML) | [iml-benchmark](https://github.com/chelof100/iml-benchmark) | In preparation |
+| **Paper 3** | Fair Atomic Governance | [fair-atomic-governance](https://github.com/chelof100/fair-atomic-governance) | In preparation |
+| **Paper 4** | Irreducible Multi-Scale Governance | [compositional-governance](https://github.com/chelof100/compositional-governance) | In preparation |
 
-**Stack logic:**
-- Paper 0 proves *when* admissibility can be guaranteed (structural condition).
-- Paper 1 builds a system that satisfies that condition (implementation).
-- Paper 2 operates above the atomic boundary to detect drift invisible to enforcement.
-- Paper 3 addresses fair allocation of atomic decisions across competing agents.
+**Series logic:**
+- Paper 0 proves *when* admissibility can be guaranteed (structural necessity — this paper).
+- Paper 1 builds a protocol that satisfies that condition (ACP, TLA+ verified).
+- Paper 2 detects behavioral drift invisible to enforcement (IML, above the boundary).
+- Paper 3 proves correct enforcement does not imply fair allocation (allocation layer).
+- Paper 4 composes all four layers and proves their joint necessity.
 
 ---
 

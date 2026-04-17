@@ -1,16 +1,43 @@
 \documentclass[11pt]{article}
 
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage[margin=1in]{geometry}
-\usepackage{hyperref}
-\usepackage{booktabs}
-\usepackage{xcolor}
-\usepackage{enumitem}
+% --- Encoding & fonts (matches ACP) ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
 \usepackage[protrusion=true,expansion=false]{microtype}
 \setlength{\emergencystretch}{6em}
+
+% --- Page geometry ---
+\usepackage[margin=1in, top=1.1in, bottom=1.1in]{geometry}
+
+% --- Math ---
+\usepackage{amsmath,amssymb,amsthm}
+
+% --- Tables & figures ---
+\usepackage{booktabs}
+\usepackage{graphicx}
+
+% --- Hyperlinks (matches ACP: colorlinks, no boxes) ---
+\usepackage[colorlinks=true,
+            linkcolor=blue!70!black,
+            urlcolor=blue!70!black,
+            citecolor=blue!70!black]{hyperref}
+
+% --- Misc ---
+\usepackage{xcolor}
+\usepackage{enumitem}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, fit, backgrounds, patterns, decorations.pathreplacing}
+
+% --- Section formatting (matches ACP) ---
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+
+% --- Paragraph spacing (matches ACP) ---
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
 
 % ---------- Theorem environments ----------
 \theoremstyle{plain}
@@ -46,7 +73,7 @@ for Guaranteeing Execution-Time Admissibility in Autonomous Systems}
 TraslaIA\\
 \texttt{info@traslaia.com}}
 
-\date{April 2026 \quad (Draft)}
+\date{April 2026}
 
 \begin{document}
 \maketitle
@@ -81,6 +108,9 @@ enforce atomic decision boundaries.  Our results establish that admissibility
 is a property of execution, not of prior evaluation, and that guaranteeing it
 requires structural guarantees at the decision boundary.
 \end{abstract}
+
+\tableofcontents
+\newpage
 
 % ============================================================
 \section{Introduction}

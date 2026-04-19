@@ -29,3 +29,6 @@ Decision Boundary Model brief and outline.md
 
 # Claude Code local config
 .claude/
+
+# arXiv submission folder (artifacts)
+Paper/

@@ -29,9 +29,10 @@ The paper introduces:
 
 **Paper 1 (ACP):** https://github.com/chelof100/acp-framework-en  
 **Paper 2 (IML):** https://github.com/chelof100/iml-benchmark  
-**Paper 3 (Fairness):** https://github.com/chelof100/fair-atomic-governance  
-**Paper 4 (Compositional):** https://github.com/chelof100/compositional-governance  
-**Paper 5 (RAM):** https://github.com/chelof100/reconstructive-authority-model
+**Paper 3/4 (Governance Structure):** https://github.com/chelof100/governance-structure  
+**Paper 5 (RAM):** https://github.com/chelof100/reconstructive-authority-model  
+**Paper 6 (OpRAM):** https://github.com/chelof100/operationalizing-ram  
+**Paper 7 (Empirical):** https://github.com/chelof100/agent-governance-applied
 
 ---
 
@@ -94,17 +95,19 @@ where `Adm(s, a) = true` but `Adm(s*, a) = false` after environment action `e`.
 | **Paper 0** | Atomic Decision Boundaries (this repo) | [decision-boundary-model](https://github.com/chelof100/decision-boundary-model) | [Zenodo](https://doi.org/10.5281/zenodo.19670649) · [arXiv:2604.17511](https://arxiv.org/abs/2604.17511) |
 | **Paper 1** | Agent Control Protocol (ACP) | [acp-framework-en](https://github.com/chelof100/acp-framework-en) | [Zenodo](https://doi.org/10.5281/zenodo.19672575) · [arXiv:2603.18829](https://arxiv.org/abs/2603.18829) |
 | **Paper 2** | From Admission to Invariants (IML) | [iml-benchmark](https://github.com/chelof100/iml-benchmark) | [Zenodo](https://doi.org/10.5281/zenodo.19672589) · [arXiv:2604.17517](https://arxiv.org/abs/2604.17517) |
-| **Paper 3** | Fair Atomic Governance | [fair-atomic-governance](https://github.com/chelof100/fair-atomic-governance) | [Zenodo](https://doi.org/10.5281/zenodo.19672597) · arXiv: under review |
-| **Paper 4** | Irreducible Multi-Scale Governance | [compositional-governance](https://github.com/chelof100/compositional-governance) | [Zenodo](https://doi.org/10.5281/zenodo.19672608) · arXiv: under review |
-| **Paper 5** | Reconstructive Authority Model (RAM) | [reconstructive-authority-model](https://github.com/chelof100/reconstructive-authority-model) | [Zenodo](https://doi.org/10.5281/zenodo.19669430) · arXiv: under review |
+| **Paper 3/4** | Irreducible Governance Structure | [governance-structure](https://github.com/chelof100/governance-structure) | [Zenodo](https://doi.org/10.5281/zenodo.19708496) · arXiv: pending |
+| **Paper 5** | Reconstructive Authority Model (RAM) | [reconstructive-authority-model](https://github.com/chelof100/reconstructive-authority-model) | [Zenodo](https://doi.org/10.5281/zenodo.19669430) · [arXiv:2604.22898](https://arxiv.org/abs/2604.22898) |
+| **Paper 6** | Operationalizing Reconstructive Authority | [operationalizing-ram](https://github.com/chelof100/operationalizing-ram) | [Zenodo](https://doi.org/10.5281/zenodo.19699460) · arXiv: pending |
+| **Paper 7** | Closing the Execution Gap (Empirical) | [agent-governance-applied](https://github.com/chelof100/agent-governance-applied) | [Zenodo](https://doi.org/10.5281/zenodo.19929771) · arXiv: pending |
 
 **Series logic:**
 - Paper 0 proves *when* admissibility can be guaranteed (structural necessity — this paper).
 - Paper 1 builds a protocol that satisfies that condition (ACP, TLA+ verified).
 - Paper 2 detects behavioral drift invisible to enforcement (IML, above the boundary).
-- Paper 3 proves correct enforcement does not imply fair allocation (allocation layer).
-- Paper 4 composes all four layers and proves their joint necessity (irreducibility).
+- Paper 3/4 proves correct enforcement does not imply fair allocation and establishes the irreducibility of the four-layer architecture.
 - Paper 5 provides the operational closure: given partial observability, determines when execution is valid at runtime (RAM).
+- Paper 6 operationalizes RAM as a runtime Recovery Loop with conditional liveness.
+- Paper 7 provides the first empirical validation of the full stack on real LangGraph agents.
 
 ---
 
